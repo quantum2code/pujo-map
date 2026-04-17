@@ -1,0 +1,24 @@
+{
+  "name": "@pujo-map/auth",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {},
+  "dependencies": {
+    "@pujo-map/db": "workspace:*",
+    "@pujo-map/env": "workspace:*",
+    "better-auth": "catalog:",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@pujo-map/config": "workspace:*",
+    "typescript": "^5"
+  }
+}

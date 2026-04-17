@@ -1,0 +1,35 @@
+{
+  "name": "pujo-map",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm -r dev",
+    "build": "pnpm -r build",
+    "check-types": "pnpm -r check-types",
+    "dev:web": "pnpm --filter web dev",
+    "dev:server": "pnpm --filter server dev",
+    "db:push": "pnpm --filter @pujo-map/db db:push",
+    "db:studio": "pnpm --filter @pujo-map/db db:studio",
+    "db:generate": "pnpm --filter @pujo-map/db db:generate",
+    "db:migrate": "pnpm --filter @pujo-map/db db:migrate",
+    "db:start": "pnpm --filter @pujo-map/db db:start",
+    "db:watch": "pnpm --filter @pujo-map/db db:watch",
+    "db:stop": "pnpm --filter @pujo-map/db db:stop",
+    "db:down": "pnpm --filter @pujo-map/db db:down"
+  },
+  "dependencies": {
+    "@pujo-map/env": "workspace:*",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@pujo-map/config": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "^5"
+  },
+  "packageManager": "pnpm@10.33.0"
+}
