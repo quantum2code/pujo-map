@@ -4,6 +4,7 @@ import { auth } from "@pujo-map/auth";
 import { db } from "@pujo-map/db";
 import { message } from "@pujo-map/db/schema/message";
 import { allowedOrigins, env } from "@pujo-map/env/server";
+import { eq } from "drizzle-orm";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import z, { string } from "zod";
 
@@ -129,6 +130,41 @@ function broadcast(data: any) {
   }
 }
 
+fastify.get(
+  "/api/msg",
+  { preHandler: fastify.authenticate },
+  async (request, reply) => {
+    if (!request.user) {
+      reply.status(401).send({
+        error: "Not authenticated",
+        code: "AUTH_FAILURE",
+      });
+      return;
+    }
+    const userId = request.user?.id;
+    if (!userId) {
+      reply.status(401).send({
+        error: "Not authenticated",
+        code: "AUTH_FAILURE",
+      });
+      return;
+    }
+
+    const msgs = await db
+      .select()
+      .from(message)
+      .where(eq(message.userId, userId));
+    if (!msgs) {
+      reply.status(500).send({
+        error: "Server failed",
+        code: "SERVER_FAILURE",
+      });
+      return;
+    }
+    return msgs;
+  },
+);
+
 fastify.post(
   "/api/msg",
   { preHandler: fastify.authenticate },
@@ -147,6 +183,39 @@ fastify.post(
       .returning();
     broadcast({
       type: "msg_add",
+      data: msg[0],
+    });
+    return msg[0];
+  },
+);
+
+fastify.delete(
+  "/api/msg",
+  { preHandler: fastify.authenticate },
+  async (request, reply) => {
+    const deleteSchema = z.object({
+      id: string().min(1),
+    });
+
+    const { data, error } = deleteSchema.safeParse(request.body);
+    if (error) {
+      return reply.status(400).send({
+        error: "invalid id",
+      });
+    }
+
+    const msg = await db
+      .delete(message)
+      .where(eq(message.id, data.id) && eq(message.userId, request.user?.id!))
+      .returning();
+
+    if (!msg[0]) {
+      return reply.status(404).send({
+        error: "message not found",
+      });
+    }
+    broadcast({
+      type: "msg_delete",
       data: msg[0],
     });
     return msg[0];

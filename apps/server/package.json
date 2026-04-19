@@ -16,6 +16,7 @@
     "@pujo-map/env": "workspace:*",
     "better-auth": "catalog:",
     "dotenv": "catalog:",
+    "drizzle-orm": "^0.45.2",
     "fastify": "^5.3.3",
     "zod": "catalog:"
   },

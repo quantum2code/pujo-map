@@ -65,6 +65,7 @@ function RouteComponent() {
         <h1>Dashboard</h1>
         <p>Welcome {session.data?.user.name}</p>
       </section>
+      <section></section>
       <div className="py-10">
         <form onSubmit={handleSubmit}>
           <label>
