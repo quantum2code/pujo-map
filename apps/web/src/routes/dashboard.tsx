@@ -3,13 +3,6 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth-client";
 import { getServerUrl, getWebSocketUrl } from "@/lib/server-url";
 import { useEffect, useRef, useState } from "react";
-import {
-  useQuery,
-  QueryClient,
-  QueryClientProvider,
-} from "@tanstack/react-query";
-
-const queryClient = new QueryClient();
 
 type Message = {
   id: string;
@@ -48,25 +41,27 @@ const getMsgs = async () => {
   return res.json();
 };
 
-function MessageView() {
-  const Messages = useQuery<Message[]>({
-    queryKey: ["msgs"],
-    queryFn: getMsgs,
-  });
-  return (
-    <div>
-      {Messages.data?.map((m) => (
-        <li key={m.id}>{m.text}</li>
-      ))}
-    </div>
-  );
-}
-
 function RouteComponent() {
   const [value, setValue] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
 
   const { session } = Route.useRouteContext();
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadMessages = async () => {
+      const data = await getMsgs();
+      if (mounted) setMessages(data);
+    };
+
+    loadMessages();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const ws = new WebSocket(getWebSocketUrl());
@@ -81,8 +76,10 @@ function RouteComponent() {
       const msg = JSON.parse(event.data);
       console.log("server: ", msg);
 
-      if (msg.type === "msg_add" || msg.type === "msg_delete") {
-        queryClient.invalidateQueries({ queryKey: ["msgs"] });
+      if (msg.type === "msg_add") {
+        setMessages((prev) => [...prev, msg.data]);
+      } else if (msg.type === "msg_delete") {
+        setMessages((prev) => prev.filter((m) => m.id !== msg.data.id));
       }
     };
 
@@ -109,6 +106,17 @@ function RouteComponent() {
     });
   };
 
+  const deleteHandler = async (id: string) => {
+    await fetch(`${getServerUrl()}api/msg`, {
+      method: "DELETE",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id: id }),
+    });
+  };
+
   return (
     <div className="mx-auto flex flex-col items-center justify-center h-screen">
       <section>
@@ -116,9 +124,21 @@ function RouteComponent() {
         <p>Welcome {session.data?.user.name}</p>
       </section>
       <section>
-        <QueryClientProvider client={queryClient}>
-          <MessageView />
-        </QueryClientProvider>
+        <div>
+          {messages.map((m) => (
+            <li key={m.id}>
+              {m.text}{" "}
+              {m.userId === session.data?.user.id && (
+                <button
+                  className="m-2 border"
+                  onClick={async () => await deleteHandler(m.id)}
+                >
+                  del
+                </button>
+              )}
+            </li>
+          ))}
+        </div>
       </section>
       <div className="py-10">
         <form onSubmit={handleSubmit}>

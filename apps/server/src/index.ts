@@ -4,7 +4,7 @@ import { auth } from "@pujo-map/auth";
 import { db } from "@pujo-map/db";
 import { message } from "@pujo-map/db/schema/message";
 import { allowedOrigins, env } from "@pujo-map/env/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import z, { string } from "zod";
 
@@ -206,7 +206,7 @@ fastify.delete(
 
     const msg = await db
       .delete(message)
-      .where(eq(message.id, data.id) && eq(message.userId, request.user?.id!))
+      .where(and(eq(message.id, data.id), eq(message.userId, request.user!.id)))
       .returning();
 
     if (!msg[0]) {
