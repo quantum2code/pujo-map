@@ -1,8 +1,31 @@
 import fastifyCors from "@fastify/cors";
 import websocket from "@fastify/websocket";
 import { auth } from "@pujo-map/auth";
+import { db } from "@pujo-map/db";
+import { message } from "@pujo-map/db/schema/message";
 import { allowedOrigins, env } from "@pujo-map/env/server";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
+import z, { string } from "zod";
+
+declare module "fastify" {
+  interface FastifyInstance {
+    authenticate: (
+      request: FastifyRequest,
+      reply: FastifyReply,
+    ) => Promise<void>;
+  }
+
+  interface FastifyRequest {
+    user?: {
+      id: string;
+    };
+  }
+}
+
+const msgSchema = z.object({
+  text: string(),
+});
+const clients: Set<WebSocket> = new Set();
 
 const baseCorsConfig = {
   origin(
@@ -98,13 +121,54 @@ fastify.decorate(
   },
 );
 
+function broadcast(data: any) {
+  const msg = JSON.stringify(data);
+
+  for (const client of clients) {
+    client.send(msg);
+  }
+}
+
+fastify.post(
+  "/api/msg",
+  { preHandler: fastify.authenticate },
+  async (request, reply) => {
+    const { data, error } = msgSchema.safeParse(request.body);
+    if (error)
+      reply.status(500).send({
+        error: error.message,
+      });
+    const msg = await db
+      .insert(message)
+      .values({
+        text: data?.text || "",
+        userId: request.user!.id,
+      })
+      .returning();
+    broadcast({
+      type: "msg_add",
+      data: msg[0],
+    });
+    return msg[0];
+  },
+);
+
 fastify.get(
   "/ws",
   { websocket: true, preHandler: fastify.authenticate },
-  async (socket, req) => {
-    socket.on("message", (message) => {
-      console.log("client: ", message.toString());
-      socket.send("hi from wss");
+  async (socket) => {
+    clients.add(socket);
+    socket.on("message", (message: any) => {
+      const msg = JSON.parse(message.toString());
+      socket.send(
+        JSON.stringify({
+          type: "reply",
+          data: `recived: ${JSON.stringify(msg)}`,
+        }),
+      );
+    });
+    socket.on("close", () => {
+      clients.delete(socket);
     });
   },
 );
