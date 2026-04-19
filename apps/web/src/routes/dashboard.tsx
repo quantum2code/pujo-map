@@ -107,8 +107,6 @@ function RouteComponent() {
       },
       body: JSON.stringify({ text: text }),
     });
-
-    queryClient.invalidateQueries({ queryKey: ["msgs"] });
   };
 
   return (
