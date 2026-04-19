@@ -3,6 +3,20 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth-client";
 import { getServerUrl, getWebSocketUrl } from "@/lib/server-url";
 import { useEffect, useRef, useState } from "react";
+import {
+  useQuery,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
+
+const queryClient = new QueryClient();
+
+type Message = {
+  id: string;
+  text: string;
+  userId: string;
+  createdAt: string;
+};
 
 export const Route = createFileRoute("/dashboard")({
   component: RouteComponent,
@@ -17,6 +31,36 @@ export const Route = createFileRoute("/dashboard")({
     return { session };
   },
 });
+
+const getMsgs = async () => {
+  const res = await fetch(`${getServerUrl()}api/msg`, {
+    method: "GET",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to load messages");
+  }
+
+  return res.json();
+};
+
+function MessageView() {
+  const Messages = useQuery<Message[]>({
+    queryKey: ["msgs"],
+    queryFn: getMsgs,
+  });
+  return (
+    <div>
+      {Messages.data?.map((m) => (
+        <li key={m.id}>{m.text}</li>
+      ))}
+    </div>
+  );
+}
 
 function RouteComponent() {
   const [value, setValue] = useState("");
@@ -36,6 +80,10 @@ function RouteComponent() {
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);
       console.log("server: ", msg);
+
+      if (msg.type === "msg_add" || msg.type === "msg_delete") {
+        queryClient.invalidateQueries({ queryKey: ["msgs"] });
+      }
     };
 
     return () => {
@@ -44,12 +92,14 @@ function RouteComponent() {
     };
   }, []);
 
-  const handleSubmit: React.SubmitEventHandler<HTMLFormElement> = (event) => {
+  const handleSubmit: React.SubmitEventHandler<HTMLFormElement> = async (
+    event,
+  ) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const text = String(formData.get("message") ?? "").trim();
     if (!text) return;
-    fetch(`${getServerUrl()}api/msg`, {
+    await fetch(`${getServerUrl()}api/msg`, {
       method: "POST",
       credentials: "include",
       headers: {
@@ -57,6 +107,8 @@ function RouteComponent() {
       },
       body: JSON.stringify({ text: text }),
     });
+
+    queryClient.invalidateQueries({ queryKey: ["msgs"] });
   };
 
   return (
@@ -65,7 +117,11 @@ function RouteComponent() {
         <h1>Dashboard</h1>
         <p>Welcome {session.data?.user.name}</p>
       </section>
-      <section></section>
+      <section>
+        <QueryClientProvider client={queryClient}>
+          <MessageView />
+        </QueryClientProvider>
+      </section>
       <div className="py-10">
         <form onSubmit={handleSubmit}>
           <label>
