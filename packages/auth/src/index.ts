@@ -1,6 +1,6 @@
 import { createDb } from "@pujo-map/db";
 import * as schema from "@pujo-map/db/schema/auth";
-import { env } from "@pujo-map/env/server";
+import { allowedOrigins, env } from "@pujo-map/env/server";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 
@@ -13,7 +13,7 @@ export function createAuth() {
 
       schema: schema,
     }),
-    trustedOrigins: [env.CORS_ORIGIN],
+    trustedOrigins: allowedOrigins,
     emailAndPassword: {
       enabled: true,
     },
