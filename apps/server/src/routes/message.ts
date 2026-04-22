@@ -12,12 +12,55 @@ const messageRoutes: FastifyPluginAsync = async (fastify) => {
     "/api/msg",
     { onRequest: fastify.authenticate },
     async (request, reply) => {
+      const requestStartedAt = performance.now();
+      const sessionStartedAt = performance.now();
       const session = await request.getSession();
+
+      const sessionDurationMs = Number(
+        (performance.now() - sessionStartedAt).toFixed(2),
+      );
+
       if (!session) {
+        fastify.log.info(
+          {
+            profile: "messages_request",
+            method: request.method,
+            url: request.url,
+            sessionDurationMs,
+            totalDurationMs: Number(
+              (performance.now() - requestStartedAt).toFixed(2),
+            ),
+            statusCode: 401,
+          },
+          "Temporary request profiling",
+        );
+
         return reply.status(401).send({ error: "Unauthorized" });
       }
 
-      return listMessages(session.session.userId);
+      const queryStartedAt = performance.now();
+      const messages = await listMessages(session.session.userId);
+      const queryDurationMs = Number(
+        (performance.now() - queryStartedAt).toFixed(2),
+      );
+
+      fastify.log.info(
+        {
+          profile: "messages_request",
+          method: request.method,
+          url: request.url,
+          sessionDurationMs,
+          queryDurationMs,
+          messageCount: messages.length,
+          totalDurationMs: Number(
+            (performance.now() - requestStartedAt).toFixed(2),
+          ),
+          statusCode: 200,
+        },
+        "Temporary request profiling",
+      );
+
+      return messages;
     },
   );
 

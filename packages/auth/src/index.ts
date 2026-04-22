@@ -25,6 +25,11 @@ export function createAuth() {
         secure: true,
         httpOnly: true,
       },
+      cookieCache: {
+        enabled: true,
+        maxAge: 5 * 60,
+        refreshCache: true,
+      },
     },
     plugins: [],
   });
