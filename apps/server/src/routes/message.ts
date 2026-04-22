@@ -1,66 +1,38 @@
 import type { FastifyPluginAsync } from "fastify";
-import {
-  createMessage,
-  deleteMessage,
-  deleteMessageSchema,
-  listMessages,
-  messageSchema,
-} from "../service/message";
+import { db } from "@pujo-map/db";
+import { message } from "@pujo-map/db/schema/message";
+import { and, eq } from "drizzle-orm";
+import z from "zod";
+
+const createMessageSchema = z.object({
+  text: z.string(),
+});
+
+const deleteMessageSchema = z.object({
+  id: z.string().min(1),
+});
 
 const messageRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get(
     "/api/msg",
-    { onRequest: fastify.authenticate },
+    { preHandler: fastify.authenticate },
     async (request, reply) => {
-      const requestStartedAt = performance.now();
-      const sessionStartedAt = performance.now();
-      const session = await request.getSession();
+      const session = await request.requireSession(reply);
+      if (!session) return;
 
-      const sessionDurationMs = Number(
-        (performance.now() - sessionStartedAt).toFixed(2),
-      );
+      try {
+        const messages = await db
+          .select()
+          .from(message)
+          .where(eq(message.userId, session.session.userId));
 
-      if (!session) {
-        fastify.log.info(
-          {
-            profile: "messages_request",
-            method: request.method,
-            url: request.url,
-            sessionDurationMs,
-            totalDurationMs: Number(
-              (performance.now() - requestStartedAt).toFixed(2),
-            ),
-            statusCode: 401,
-          },
-          "Temporary request profiling",
-        );
-
-        return reply.status(401).send({ error: "Unauthorized" });
+        return reply.send(messages);
+      } catch {
+        return reply.code(500).send({
+          code: "INTERNAL",
+          message: "Failed to load messages",
+        });
       }
-
-      const queryStartedAt = performance.now();
-      const messages = await listMessages(session.session.userId);
-      const queryDurationMs = Number(
-        (performance.now() - queryStartedAt).toFixed(2),
-      );
-
-      fastify.log.info(
-        {
-          profile: "messages_request",
-          method: request.method,
-          url: request.url,
-          sessionDurationMs,
-          queryDurationMs,
-          messageCount: messages.length,
-          totalDurationMs: Number(
-            (performance.now() - requestStartedAt).toFixed(2),
-          ),
-          statusCode: 200,
-        },
-        "Temporary request profiling",
-      );
-
-      return messages;
     },
   );
 
@@ -68,27 +40,45 @@ const messageRoutes: FastifyPluginAsync = async (fastify) => {
     "/api/msg",
     { preHandler: fastify.authenticate },
     async (request, reply) => {
-      const parsed = messageSchema.safeParse(request.body);
+      const parsed = createMessageSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ error: "Invalid message payload" });
+        return reply.code(400).send({
+          code: "VALIDATION_ERROR",
+          message: "Invalid message payload",
+        });
       }
 
-      const session = await request.getSession();
-      if (!session) {
-        return reply.status(401).send({ error: "Unauthorized" });
+      const session = await request.requireSession(reply);
+      if (!session) return;
+
+      try {
+        const [created] = await db
+          .insert(message)
+          .values({
+            text: parsed.data.text,
+            userId: session.session.userId,
+          })
+          .returning();
+
+        if (!created) {
+          return reply.code(500).send({
+            code: "INTERNAL",
+            message: "Failed to create message",
+          });
+        }
+
+        fastify.broadcast({
+          type: "msg_add",
+          data: created,
+        });
+
+        return reply.send(created);
+      } catch {
+        return reply.code(500).send({
+          code: "INTERNAL",
+          message: "Failed to create message",
+        });
       }
-
-      const msg = await createMessage({
-        text: parsed.data.text,
-        userId: session.session.userId,
-      });
-
-      fastify.broadcast({
-        type: "msg_add",
-        data: msg,
-      });
-
-      return msg;
     },
   );
 
@@ -98,31 +88,45 @@ const messageRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const parsed = deleteMessageSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ error: "Invalid delete payload" });
-      }
-
-      const session = await request.getSession();
-      if (!session) {
-        return reply.status(401).send({ error: "Unauthorized" });
-      }
-
-      const msg = await deleteMessage({
-        id: parsed.data.id,
-        userId: session.session.userId,
-      });
-
-      if (!msg) {
-        return reply.status(404).send({
-          error: "message not found",
+        return reply.code(400).send({
+          code: "VALIDATION_ERROR",
+          message: "Invalid delete payload",
         });
       }
 
-      fastify.broadcast({
-        type: "msg_delete",
-        data: msg,
-      });
+      const session = await request.requireSession(reply);
+      if (!session) return;
 
-      return msg;
+      try {
+        const [deleted] = await db
+          .delete(message)
+          .where(
+            and(
+              eq(message.id, parsed.data.id),
+              eq(message.userId, session.session.userId),
+            ),
+          )
+          .returning({ id: message.id, userId: message.userId });
+
+        if (!deleted) {
+          return reply.code(404).send({
+            code: "NOT_FOUND",
+            message: "Message not found",
+          });
+        }
+
+        fastify.broadcast({
+          type: "msg_delete",
+          data: deleted,
+        });
+
+        return reply.send(deleted);
+      } catch {
+        return reply.code(500).send({
+          code: "INTERNAL",
+          message: "Failed to delete message",
+        });
+      }
     },
   );
 };

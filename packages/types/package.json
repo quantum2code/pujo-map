@@ -1,0 +1,18 @@
+{
+  "name": "@pujo-map/types",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./result": "./result.ts",
+    "./ws": "./ws.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@pujo-map/config": "workspace:*",
+    "typescript": "^5"
+  }
+}

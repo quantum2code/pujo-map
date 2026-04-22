@@ -2,6 +2,7 @@ import type { auth } from "@pujo-map/auth";
 import "fastify";
 
 type AuthSession = Awaited<ReturnType<typeof auth.api.getSession>>;
+type NonNullableAuthSession = NonNullable<AuthSession>;
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -12,6 +13,7 @@ declare module "fastify" {
 
   interface FastifyRequest {
     getSession: () => Promise<AuthSession>;
+    requireSession: (reply: FastifyReply) => Promise<NonNullableAuthSession | null>;
     _session?: AuthSession | undefined;
   }
 }

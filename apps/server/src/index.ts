@@ -2,8 +2,7 @@ import fastifyCors from "@fastify/cors";
 import websocket from "@fastify/websocket";
 import Fastify from "fastify";
 import { baseCorsConfig } from "./config/cors";
-import authPlugin from "./plugins/session";
-import authenticatePlugin from "./plugins/authenticate";
+import authPlugin from "./plugins/auth";
 import authRoutes from "./routes/auth";
 import messageRoutes from "./routes/message";
 import websocketRoutes from "./routes/websocket";
@@ -23,7 +22,6 @@ fastify.decorate("broadcast", (data: unknown) => {
 
 fastify.register(fastifyCors, baseCorsConfig);
 fastify.register(authPlugin);
-fastify.register(authenticatePlugin);
 await fastify.register(websocket);
 
 fastify.register(authRoutes);

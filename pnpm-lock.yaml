@@ -84,6 +84,9 @@ importers:
       '@pujo-map/env':
         specifier: workspace:*
         version: link:../../packages/env
+      '@pujo-map/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       better-auth:
         specifier: 'catalog:'
         version: 1.5.5(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@types/pg@8.20.0)(kysely@0.28.16)(pg@8.20.0))(mongodb@7.1.1)(pg@8.20.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -280,6 +283,15 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.17
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
+  packages/types:
+    devDependencies:
+      '@pujo-map/config':
+        specifier: workspace:*
+        version: link:../config
       typescript:
         specifier: ^5
         version: 5.9.3
