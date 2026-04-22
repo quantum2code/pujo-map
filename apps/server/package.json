@@ -18,6 +18,7 @@
     "dotenv": "catalog:",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.3.3",
+    "fastify-plugin": "^5.1.0",
     "zod": "catalog:"
   },
   "devDependencies": {

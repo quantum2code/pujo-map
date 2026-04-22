@@ -124,9 +124,9 @@ function RouteComponent() {
         <p>Welcome {session.data?.user.name}</p>
       </section>
       <section>
-        <div>
+        <div className="outline p-2  bg-linear-to-b from-neutral-900 px-3 mt-4">
           {messages.map((m) => (
-            <li key={m.id}>
+            <p key={m.id}>
               {m.text}{" "}
               {m.userId === session.data?.user.id && (
                 <button
@@ -136,12 +136,12 @@ function RouteComponent() {
                   del
                 </button>
               )}
-            </li>
+            </p>
           ))}
         </div>
       </section>
-      <div className="py-10">
-        <form onSubmit={handleSubmit}>
+      <div className="py-10 text-center">
+        <form onSubmit={handleSubmit} className="outline p-4">
           <label>
             submit event
             <input
@@ -149,12 +149,15 @@ function RouteComponent() {
               name="message"
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              className="outline mx-4"
+              className="outline mx-4 p-1"
             />
           </label>
-          <button type="submit">submit</button>
+          <button className="border bg-neutral-600 px-3" type="submit">
+            submit
+          </button>
         </form>
         <button
+          className="border bg-neutral-600 px-3 mt-3"
           onClick={() => {
             wsRef.current?.send(
               JSON.stringify({ type: "greet", data: "hello" }),
