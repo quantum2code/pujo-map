@@ -130,10 +130,10 @@ function RouteComponent() {
               {m.text}{" "}
               {m.userId === session.data?.user.id && (
                 <button
-                  className="m-2 border"
+                  className="m-2 border px-2"
                   onClick={async () => await deleteHandler(m.id)}
                 >
-                  del
+                  X
                 </button>
               )}
             </p>

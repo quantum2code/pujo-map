@@ -21,10 +21,8 @@ const messageRoutes: FastifyPluginAsync = async (fastify) => {
       const session = await request.requireSession();
 
       try {
-        const messages = await db
-          .select()
-          .from(message)
-          .where(eq(message.userId, session.session.userId));
+        const messages = await db.select().from(message);
+        // .where(eq(message.userId, session.session.userId));
 
         return messages;
       } catch (error) {
