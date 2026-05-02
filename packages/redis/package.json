@@ -1,0 +1,23 @@
+{
+  "name": "@pujo-map/redis",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {},
+  "dependencies": {
+    "@pujo-map/env": "workspace:*",
+    "dotenv": "catalog:",
+    "redis": "^5.12.1",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@pujo-map/config": "workspace:*",
+    "typescript": "^5"
+  }
+}

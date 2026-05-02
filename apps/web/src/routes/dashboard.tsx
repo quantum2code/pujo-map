@@ -3,19 +3,13 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth-client";
 import { getServerUrl, getWebSocketUrl } from "@/lib/server-url";
 import { useEffect, useRef, useState } from "react";
-import {
-  useQuery,
-  QueryClient,
-  QueryClientProvider,
-} from "@tanstack/react-query";
 
-const queryClient = new QueryClient();
-
-type Message = {
+export type Message = {
   id: string;
   text: string;
   userId: string;
   createdAt: string;
+  status: "queued" | "processing" | "processed" | "failed";
 };
 
 export const Route = createFileRoute("/dashboard")({
@@ -32,7 +26,7 @@ export const Route = createFileRoute("/dashboard")({
   },
 });
 
-const getMsgs = async () => {
+export const getMsgs = async () => {
   const res = await fetch(`${getServerUrl()}api/msg`, {
     method: "GET",
     credentials: "include",
@@ -48,25 +42,27 @@ const getMsgs = async () => {
   return res.json();
 };
 
-function MessageView() {
-  const Messages = useQuery<Message[]>({
-    queryKey: ["msgs"],
-    queryFn: getMsgs,
-  });
-  return (
-    <div>
-      {Messages.data?.map((m) => (
-        <li key={m.id}>{m.text}</li>
-      ))}
-    </div>
-  );
-}
-
 function RouteComponent() {
   const [value, setValue] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
 
   const { session } = Route.useRouteContext();
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadMessages = async () => {
+      const data = await getMsgs();
+      if (mounted) setMessages(data);
+    };
+
+    loadMessages();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const ws = new WebSocket(getWebSocketUrl());
@@ -81,8 +77,10 @@ function RouteComponent() {
       const msg = JSON.parse(event.data);
       console.log("server: ", msg);
 
-      if (msg.type === "msg_add" || msg.type === "msg_delete") {
-        queryClient.invalidateQueries({ queryKey: ["msgs"] });
+      if (msg.type === "msg_add") {
+        setMessages((prev) => [...prev, msg.data]);
+      } else if (msg.type === "msg_delete") {
+        setMessages((prev) => prev.filter((m) => m.id !== msg.data.id));
       }
     };
 
@@ -109,6 +107,17 @@ function RouteComponent() {
     });
   };
 
+  const deleteHandler = async (id: string) => {
+    await fetch(`${getServerUrl()}api/msg`, {
+      method: "DELETE",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id: id }),
+    });
+  };
+
   return (
     <div className="mx-auto flex flex-col items-center justify-center h-screen">
       <section>
@@ -116,12 +125,24 @@ function RouteComponent() {
         <p>Welcome {session.data?.user.name}</p>
       </section>
       <section>
-        <QueryClientProvider client={queryClient}>
-          <MessageView />
-        </QueryClientProvider>
+        <div className="outline p-2  bg-linear-to-b from-neutral-900 px-3 mt-4">
+          {messages.map((m) => (
+            <p key={m.id}>
+              {m.text}{" "}
+              {m.userId === session.data?.user.id && (
+                <button
+                  className="m-2 border px-2"
+                  onClick={async () => await deleteHandler(m.id)}
+                >
+                  X
+                </button>
+              )}
+            </p>
+          ))}
+        </div>
       </section>
-      <div className="py-10">
-        <form onSubmit={handleSubmit}>
+      <div className="py-10 text-center">
+        <form onSubmit={handleSubmit} className="outline p-4">
           <label>
             submit event
             <input
@@ -129,12 +150,15 @@ function RouteComponent() {
               name="message"
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              className="outline mx-4"
+              className="outline mx-4 p-1"
             />
           </label>
-          <button type="submit">submit</button>
+          <button className="border bg-neutral-600 px-3" type="submit">
+            submit
+          </button>
         </form>
         <button
+          className="border bg-neutral-600 px-3 mt-3"
           onClick={() => {
             wsRef.current?.send(
               JSON.stringify({ type: "greet", data: "hello" }),
