@@ -1,6 +1,22 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+import { existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
+
+const currentDir = dirname(fileURLToPath(import.meta.url));
+const envCandidates = [
+  resolve(currentDir, "../../../apps/server/.env"),
+  resolve(process.cwd(), ".env"),
+];
+
+for (const envPath of envCandidates) {
+  if (existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+    break;
+  }
+}
 
 function parseOriginList(value?: string) {
   if (!value) return [];

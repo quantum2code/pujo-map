@@ -5,6 +5,9 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./http": "./http.ts",
+    "./job": "./job.ts",
+    "./message": "./message.ts",
     "./result": "./result.ts",
     "./ws": "./ws.ts"
   },

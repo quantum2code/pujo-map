@@ -7,6 +7,8 @@ import authRoutes from "./routes/auth";
 import messageRoutes from "./routes/message";
 import websocketRoutes from "./routes/websocket";
 import { isHttpError } from "./utils/http-error";
+import { connectRedis } from "@pujo-map/redis";
+import { serverWsMsgSchema } from "@pujo-map/types/ws";
 
 const fastify = Fastify({
   logger: true,
@@ -57,10 +59,29 @@ fastify.get("/", async () => {
   return "OK";
 });
 
+async function startRedisSubscription() {
+  try {
+    const client = await connectRedis();
+    const sub = client.duplicate();
+
+    await sub.connect();
+    await sub.subscribe("events_toserver", (message) => {
+      const event = serverWsMsgSchema.parse(JSON.parse(message));
+
+      if (event.type === "msg_add" || event.type === "msg_delete") {
+        fastify.broadcast(event);
+      }
+    });
+  } catch (error) {
+    fastify.log.error({ err: error }, "Failed to start Redis subscription");
+  }
+}
+
 fastify.listen({ port: 3000 }, (err) => {
   if (err) {
     fastify.log.error(err);
     process.exit(1);
   }
   console.log("Server running on port 3000");
+  void startRedisSubscription();
 });

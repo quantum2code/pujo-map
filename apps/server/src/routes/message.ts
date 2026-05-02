@@ -2,24 +2,16 @@ import type { FastifyPluginAsync } from "fastify";
 import { db } from "@pujo-map/db";
 import { message } from "@pujo-map/db/schema/message";
 import { and, eq } from "drizzle-orm";
-import z from "zod";
+import { createMessageBodySchema, deleteMessageBodySchema } from "@pujo-map/types/http";
 import { HttpError, isHttpError } from "../utils/http-error";
 import { addJob } from "@/utils/redis-stream";
-
-const createMessageSchema = z.object({
-  text: z.string(),
-});
-
-const deleteMessageSchema = z.object({
-  id: z.string().min(1),
-});
 
 const messageRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get(
     "/api/msg",
     { preHandler: fastify.authenticate },
     async (request) => {
-      const session = await request.requireSession();
+      await request.requireSession();
 
       try {
         const messages = await db.select().from(message);
@@ -40,7 +32,7 @@ const messageRoutes: FastifyPluginAsync = async (fastify) => {
     "/api/msg",
     { preHandler: fastify.authenticate },
     async (request) => {
-      const parsed = createMessageSchema.safeParse(request.body);
+      const parsed = createMessageBodySchema.safeParse(request.body);
       if (!parsed.success) {
         throw new HttpError(400, "VALIDATION_ERROR", "Invalid message payload");
       }
@@ -60,14 +52,10 @@ const messageRoutes: FastifyPluginAsync = async (fastify) => {
           throw new HttpError(500, "INTERNAL", "Failed to create message");
         }
 
-        // fastify.broadcast({
-        //   type: "msg_add",
-        //   data: created,
-        // });
         await addJob({
-                   type: "msg_add",
-                   data: JSON.stringify(created),
-             })
+          type: "msg_add",
+          data: { messageId: created.id },
+        });
 
         return created;
       } catch (error) {
@@ -84,7 +72,7 @@ const messageRoutes: FastifyPluginAsync = async (fastify) => {
     "/api/msg",
     { preHandler: fastify.authenticate },
     async (request) => {
-      const parsed = deleteMessageSchema.safeParse(request.body);
+      const parsed = deleteMessageBodySchema.safeParse(request.body);
       if (!parsed.success) {
         throw new HttpError(400, "VALIDATION_ERROR", "Invalid delete payload");
       }
@@ -106,15 +94,10 @@ const messageRoutes: FastifyPluginAsync = async (fastify) => {
           throw new HttpError(404, "NOT_FOUND", "Message not found");
         }
 
-        // fastify.broadcast({
-        //   type: "msg_delete",
-        //   data: deleted,
-        // });
-
         await addJob({
-                   type: "msg_deleted",
-                   data: JSON.stringify(deleted),
-             })
+          type: "msg_delete",
+          data: { messageId: deleted.id, userId: deleted.userId },
+        });
         return deleted;
       } catch (error) {
         if (isHttpError(error)) {

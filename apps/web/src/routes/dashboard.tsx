@@ -9,6 +9,7 @@ export type Message = {
   text: string;
   userId: string;
   createdAt: string;
+  status: "queued" | "processing" | "processed" | "failed";
 };
 
 export const Route = createFileRoute("/dashboard")({

@@ -1,11 +1,7 @@
 import z from "zod";
+import { messageDtoSchema } from "./message";
 
-export const wsMsgAddSchema = z.object({
-  id: z.string(),
-  text: z.string(),
-  userId: z.string(),
-  createdAt: z.string(),
-});
+export const wsMsgAddSchema = messageDtoSchema;
 export const wsMsgDelSchema = z.object({ id: z.string(), userId: z.string() });
 export const wsErrorSchema = z.object({
   code: z.string(),
@@ -19,6 +15,8 @@ export const serverWsMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("error"), data: wsErrorSchema }),
   z.object({ type: z.literal("pong") }),
 ]);
+
+export type ServerWsMsg = z.infer<typeof serverWsMsgSchema>;
 
 export const clientWsMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("greet"), data: z.string() }),
