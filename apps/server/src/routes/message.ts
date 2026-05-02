@@ -4,6 +4,7 @@ import { message } from "@pujo-map/db/schema/message";
 import { and, eq } from "drizzle-orm";
 import z from "zod";
 import { HttpError, isHttpError } from "../utils/http-error";
+import { addJob } from "@/utils/redis-stream";
 
 const createMessageSchema = z.object({
   text: z.string(),
@@ -59,10 +60,14 @@ const messageRoutes: FastifyPluginAsync = async (fastify) => {
           throw new HttpError(500, "INTERNAL", "Failed to create message");
         }
 
-        fastify.broadcast({
-          type: "msg_add",
-          data: created,
-        });
+        // fastify.broadcast({
+        //   type: "msg_add",
+        //   data: created,
+        // });
+        await addJob({
+                   type: "msg_add",
+                   data: JSON.stringify(created),
+             })
 
         return created;
       } catch (error) {
@@ -101,11 +106,15 @@ const messageRoutes: FastifyPluginAsync = async (fastify) => {
           throw new HttpError(404, "NOT_FOUND", "Message not found");
         }
 
-        fastify.broadcast({
-          type: "msg_delete",
-          data: deleted,
-        });
+        // fastify.broadcast({
+        //   type: "msg_delete",
+        //   data: deleted,
+        // });
 
+        await addJob({
+                   type: "msg_deleted",
+                   data: JSON.stringify(deleted),
+             })
         return deleted;
       } catch (error) {
         if (isHttpError(error)) {

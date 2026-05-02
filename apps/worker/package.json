@@ -1,5 +1,5 @@
 {
-  "name": "server",
+  "name": "worker",
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
