@@ -1,5 +1,6 @@
 import fp from "fastify-plugin";
 import { auth } from "@pujo-map/auth";
+import { HttpError } from "../utils/http-error";
 import { toWebHeaders } from "../utils/web-request";
 
 export default fp(async (fastify) => {
@@ -14,21 +15,17 @@ export default fp(async (fastify) => {
     return this._session;
   });
 
-  fastify.decorateRequest("requireSession", async function (reply) {
+  fastify.decorateRequest("requireSession", async function () {
     const session = await this.getSession();
 
     if (!session) {
-      reply.code(401).send({
-        code: "UNAUTHORIZED",
-        message: "Unauthorized",
-      });
-      return null;
+      throw new HttpError(401, "UNAUTHORIZED", "Unauthorized");
     }
 
     return session;
   });
 
-  fastify.decorate("authenticate", async (request, reply) => {
-    await request.requireSession(reply);
+  fastify.decorate("authenticate", async (request) => {
+    await request.requireSession();
   });
 });

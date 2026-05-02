@@ -3,6 +3,7 @@ import { db } from "@pujo-map/db";
 import { message } from "@pujo-map/db/schema/message";
 import { and, eq } from "drizzle-orm";
 import z from "zod";
+import { HttpError, isHttpError } from "../utils/http-error";
 
 const createMessageSchema = z.object({
   text: z.string(),
@@ -16,9 +17,8 @@ const messageRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get(
     "/api/msg",
     { preHandler: fastify.authenticate },
-    async (request, reply) => {
-      const session = await request.requireSession(reply);
-      if (!session) return;
+    async (request) => {
+      const session = await request.requireSession();
 
       try {
         const messages = await db
@@ -26,12 +26,13 @@ const messageRoutes: FastifyPluginAsync = async (fastify) => {
           .from(message)
           .where(eq(message.userId, session.session.userId));
 
-        return reply.send(messages);
-      } catch {
-        return reply.code(500).send({
-          code: "INTERNAL",
-          message: "Failed to load messages",
-        });
+        return messages;
+      } catch (error) {
+        if (isHttpError(error)) {
+          throw error;
+        }
+
+        throw new HttpError(500, "INTERNAL", "Failed to load messages");
       }
     },
   );
@@ -39,17 +40,13 @@ const messageRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post(
     "/api/msg",
     { preHandler: fastify.authenticate },
-    async (request, reply) => {
+    async (request) => {
       const parsed = createMessageSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.code(400).send({
-          code: "VALIDATION_ERROR",
-          message: "Invalid message payload",
-        });
+        throw new HttpError(400, "VALIDATION_ERROR", "Invalid message payload");
       }
 
-      const session = await request.requireSession(reply);
-      if (!session) return;
+      const session = await request.requireSession();
 
       try {
         const [created] = await db
@@ -61,10 +58,7 @@ const messageRoutes: FastifyPluginAsync = async (fastify) => {
           .returning();
 
         if (!created) {
-          return reply.code(500).send({
-            code: "INTERNAL",
-            message: "Failed to create message",
-          });
+          throw new HttpError(500, "INTERNAL", "Failed to create message");
         }
 
         fastify.broadcast({
@@ -72,12 +66,13 @@ const messageRoutes: FastifyPluginAsync = async (fastify) => {
           data: created,
         });
 
-        return reply.send(created);
-      } catch {
-        return reply.code(500).send({
-          code: "INTERNAL",
-          message: "Failed to create message",
-        });
+        return created;
+      } catch (error) {
+        if (isHttpError(error)) {
+          throw error;
+        }
+
+        throw new HttpError(500, "INTERNAL", "Failed to create message");
       }
     },
   );
@@ -85,17 +80,13 @@ const messageRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.delete(
     "/api/msg",
     { preHandler: fastify.authenticate },
-    async (request, reply) => {
+    async (request) => {
       const parsed = deleteMessageSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.code(400).send({
-          code: "VALIDATION_ERROR",
-          message: "Invalid delete payload",
-        });
+        throw new HttpError(400, "VALIDATION_ERROR", "Invalid delete payload");
       }
 
-      const session = await request.requireSession(reply);
-      if (!session) return;
+      const session = await request.requireSession();
 
       try {
         const [deleted] = await db
@@ -109,10 +100,7 @@ const messageRoutes: FastifyPluginAsync = async (fastify) => {
           .returning({ id: message.id, userId: message.userId });
 
         if (!deleted) {
-          return reply.code(404).send({
-            code: "NOT_FOUND",
-            message: "Message not found",
-          });
+          throw new HttpError(404, "NOT_FOUND", "Message not found");
         }
 
         fastify.broadcast({
@@ -120,12 +108,13 @@ const messageRoutes: FastifyPluginAsync = async (fastify) => {
           data: deleted,
         });
 
-        return reply.send(deleted);
-      } catch {
-        return reply.code(500).send({
-          code: "INTERNAL",
-          message: "Failed to delete message",
-        });
+        return deleted;
+      } catch (error) {
+        if (isHttpError(error)) {
+          throw error;
+        }
+
+        throw new HttpError(500, "INTERNAL", "Failed to delete message");
       }
     },
   );

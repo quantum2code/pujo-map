@@ -13,7 +13,7 @@ declare module "fastify" {
 
   interface FastifyRequest {
     getSession: () => Promise<AuthSession>;
-    requireSession: (reply: FastifyReply) => Promise<NonNullableAuthSession | null>;
+    requireSession: () => Promise<NonNullableAuthSession>;
     _session?: AuthSession | undefined;
   }
 }

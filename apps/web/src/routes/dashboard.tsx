@@ -4,7 +4,7 @@ import { authClient } from "@/lib/auth-client";
 import { getServerUrl, getWebSocketUrl } from "@/lib/server-url";
 import { useEffect, useRef, useState } from "react";
 
-type Message = {
+export type Message = {
   id: string;
   text: string;
   userId: string;
@@ -25,7 +25,7 @@ export const Route = createFileRoute("/dashboard")({
   },
 });
 
-const getMsgs = async () => {
+export const getMsgs = async () => {
   const res = await fetch(`${getServerUrl()}api/msg`, {
     method: "GET",
     credentials: "include",
