@@ -11,7 +11,6 @@ export const wsErrorSchema = z.object({
 export const serverWsMsgSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("msg_add"), data: wsMsgAddSchema }),
   z.object({ type: z.literal("msg_delete"), data: wsMsgDelSchema }),
-  //   z.object({ type: z.literal("error") }).extend(wsErrorSchema.shape), ditched for keeping consistent use of data field
   z.object({ type: z.literal("error"), data: wsErrorSchema }),
   z.object({ type: z.literal("pong") }),
 ]);

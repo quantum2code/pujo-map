@@ -14,6 +14,7 @@ type DbMessage = typeof message.$inferSelect;
 type StreamMessage = { id: string; message: Record<string, string> };
 type StreamReadResult = Array<{ name: string; messages: StreamMessage[] }>;
 
+// turns date to string thats it
 function toMessageDto(dbMessage: DbMessage) {
   return {
     id: dbMessage.id,
@@ -27,6 +28,7 @@ function toMessageDto(dbMessage: DbMessage) {
   };
 }
 
+// parses the outer job schema
 function parseQueuedJob(fields: Record<string, string>) {
   const rawType = fields.type;
   const rawData = fields.data;
@@ -52,6 +54,7 @@ function isStreamReadResult(value: unknown): value is StreamReadResult {
   return Array.isArray(value);
 }
 
+// for pubilishing processed data, which server can them read for brodcasting
 async function publishServerEvent(
   pub: Awaited<ReturnType<typeof connectRedis>>,
   event: ServerWsMsg,
@@ -61,6 +64,7 @@ async function publishServerEvent(
   await pub.publish(EVENTS_TO_SERVER_CHANNEL, JSON.stringify(parsed));
 }
 
+// what to do on certain job events
 async function processJob(pub: Awaited<ReturnType<typeof connectRedis>>, job: QueueJob) {
   switch (job.type) {
     case ("msg_delete"):
@@ -99,6 +103,7 @@ async function processJob(pub: Awaited<ReturnType<typeof connectRedis>>, job: Qu
   }
 }
 
+// main worker loop
 export async function startWorker(consumerName: string) {
   const client = await connectRedis();
   const pub = client.duplicate();

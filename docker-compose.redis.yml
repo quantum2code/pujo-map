@@ -1,0 +1,17 @@
+services:
+  redis:
+    image: redis:7.4-alpine
+    container_name: pujo-map-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - pujo-net
+
+volumes:
+  redis-data:
+
+networks:
+  pujo-net:

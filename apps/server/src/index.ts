@@ -59,6 +59,7 @@ fastify.get("/", async () => {
   return "OK";
 });
 
+// msg subscription handler
 async function startRedisSubscription() {
   try {
     const client = await connectRedis();
