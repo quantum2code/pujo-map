@@ -13,13 +13,15 @@
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed:foods": "tsx --watch ./src/seed/foods.ts"
   },
   "dependencies": {
     "@pujo-map/env": "workspace:*",
     "dotenv": "catalog:",
     "drizzle-orm": "^0.45.1",
     "pg": "^8.17.1",
+    "tsx": "^4.21.0",
     "zod": "catalog:"
   },
   "devDependencies": {

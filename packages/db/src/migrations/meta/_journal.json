@@ -29,6 +29,27 @@
       "when": 1777746811465,
       "tag": "0003_uneven_amazoness",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1777902287390,
+      "tag": "0004_jittery_dragon_lord",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1777902727591,
+      "tag": "0005_icy_deathbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1777918481448,
+      "tag": "0006_big_thor_girl",
+      "breakpoints": true
     }
   ]
 }
