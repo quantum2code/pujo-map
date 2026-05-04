@@ -1,0 +1,1 @@
+ALTER TABLE "place" RENAME COLUMN "opening_hrs" TO "opening_hours";

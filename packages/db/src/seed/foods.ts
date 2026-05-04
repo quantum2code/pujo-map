@@ -1,6 +1,11 @@
 import { db } from "..";
 import { place } from "../schema";
-import { getOverpassData, OVERPASS_API_URL, resetTable } from "./seed";
+import {
+  getOpeningHrs,
+  getOverpassData,
+  OVERPASS_API_URL,
+  resetTable,
+} from "./seed";
 
 //fetch data from different sources
 // - Overpass api
@@ -66,7 +71,9 @@ for (const el of elements) {
     name: tags.name ?? null,
     amenity: tags.amenity ?? null,
     cuisine: cuisineArr ?? null,
-    opening_hrs: tags.opening_hours,
+    openingHours: tags.opening_hours
+      ? await getOpeningHrs(tags.opening_hours)
+      : null,
     properties: el,
     location: [lon, lat],
   });
@@ -86,10 +93,12 @@ if (records.length > 0) {
     }
 
     console.log("[seed:foods] seed complete");
+    process.exit(0);
   } catch (err) {
     console.error("Failed to insert places:", err);
     process.exit(1);
   }
 } else {
   console.log("[seed:foods] no records to insert");
+  process.exit(0);
 }

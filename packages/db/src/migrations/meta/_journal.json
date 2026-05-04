@@ -8,6 +8,13 @@
       "when": 1777919082846,
       "tag": "0000_adorable_lord_tyger",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777928699397,
+      "tag": "0001_third_gateway",
+      "breakpoints": true
     }
   ]
 }
