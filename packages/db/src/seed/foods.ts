@@ -64,6 +64,7 @@ for (const el of elements) {
   records.push({
     id: `${el.type}/${el.id}`,
     name: tags.name ?? null,
+    amenity: tags.amenity ?? null,
     cuisine: cuisineArr ?? null,
     opening_hrs: tags.opening_hours,
     properties: el,

@@ -5,50 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1776608609685,
-      "tag": "0000_cute_morg",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1776619074440,
-      "tag": "0001_thankful_terrax",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1777708800000,
-      "tag": "0002_message_status",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1777746811465,
-      "tag": "0003_uneven_amazoness",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1777902287390,
-      "tag": "0004_jittery_dragon_lord",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1777902727591,
-      "tag": "0005_icy_deathbird",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1777918481448,
-      "tag": "0006_big_thor_girl",
+      "when": 1777919082846,
+      "tag": "0000_adorable_lord_tyger",
       "breakpoints": true
     }
   ]
