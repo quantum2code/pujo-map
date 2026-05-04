@@ -5,6 +5,7 @@ import { baseCorsConfig } from "./config/cors";
 import authPlugin from "./plugins/auth";
 import authRoutes from "./routes/auth";
 import messageRoutes from "./routes/message";
+import { placeRoutes } from "./routes/place";
 import websocketRoutes from "./routes/websocket";
 import { isHttpError } from "./utils/http-error";
 import { connectRedis } from "@pujo-map/redis";
@@ -53,6 +54,7 @@ await fastify.register(websocket);
 
 fastify.register(authRoutes);
 fastify.register(messageRoutes);
+fastify.register(placeRoutes);
 fastify.register(websocketRoutes);
 
 fastify.get("/", async () => {

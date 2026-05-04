@@ -14,7 +14,7 @@
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed:foods": "tsx --watch ./src/seed/foods.ts"
+    "db:seed:foods": "tsx ./src/seed/foods.ts"
   },
   "dependencies": {
     "@pujo-map/env": "workspace:*",

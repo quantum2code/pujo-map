@@ -82,7 +82,6 @@ for (const el of elements) {
 if (records.length > 0) {
   try {
     console.log(`[seed:foods] inserting ${records.length} records`);
-    // insert in batches to avoid huge single query
     const batchSize = 100;
     for (let i = 0; i < records.length; i += batchSize) {
       const batch = records.slice(i, i + batchSize);
