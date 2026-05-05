@@ -1,0 +1,14 @@
+{
+"type": "FeatureCollection",
+"name": "Kolkata Bonedi Bari Map",
+"features": [
+{ "type": "Feature", "properties": { "Name": "Srimani Barir Durga Pujo", "Courtesy": "The Pujo Company" }, "geometry": { "type": "Point", "coordinates": [ 88.3738888, 22.5818002, 0.0 ] } },
+{ "type": "Feature", "properties": { "Name": "Hathkhola Dutta Barir Durga Pujo", "Courtesy": "The Pujo Company" }, "geometry": { "type": "Point", "coordinates": [ 88.3549315, 22.5928457, 0.0 ] } },
+{ "type": "Feature", "properties": { "Name": "Sovabazar Rajbarir Durga Pujo", "Courtesy": "The Pujo Company" }, "geometry": { "type": "Point", "coordinates": [ 88.3674185, 22.5962505, 0.0 ] } },
+{ "type": "Feature", "properties": { "Name": "Roychoudhury Barir Durga Pujo", "Courtesy": "The Pujo Company" }, "geometry": { "type": "Point", "coordinates": [ 88.3065756, 22.4800988, 0.0 ] } },
+{ "type": "Feature", "properties": { "Name": "Khelat Ghose er Durga Pujo", "Courtesy": "The Pujo Company" }, "geometry": { "type": "Point", "coordinates": [ 88.3565391, 22.5887689, 0.0 ] } },
+{ "type": "Feature", "properties": { "Name": "Rani Rashmoni er Durga Pujo", "Courtesy": "The Pujo Company" }, "geometry": { "type": "Point", "coordinates": [ 88.3553522, 22.5624669, 0.0 ] } },
+{ "type": "Feature", "properties": { "Name": "RAMDULAL NIBAS er Durga Pujo", "Courtesy": "The Pujo Company" }, "geometry": { "type": "Point", "coordinates": [ 88.3644845, 22.5903317, 0.0 ] } },
+{ "type": "Feature", "properties": { "Name": "Baghbazar Haldar Bari er Pujo", "Courtesy": "The Pujo Company" }, "geometry": { "type": "Point", "coordinates": [ 88.3670376, 22.6034575, 0.0 ] } }
+]
+}
