@@ -7,6 +7,7 @@ import authRoutes from "./routes/auth";
 import messageRoutes from "./routes/message";
 import websocketRoutes from "./routes/websocket";
 import { isHttpError } from "./utils/http-error";
+import { env } from "@pujo-map/env/server";
 import { connectRedis } from "@pujo-map/redis";
 import { serverWsMsgSchema } from "@pujo-map/types/ws";
 
@@ -78,11 +79,11 @@ async function startRedisSubscription() {
   }
 }
 
-fastify.listen({ port: 3000 }, (err) => {
+fastify.listen({ port: env.PORT }, (err) => {
   if (err) {
     fastify.log.error(err);
     process.exit(1);
   }
-  console.log("Server running on port 3000");
+  console.log(`Server running on port ${env.PORT}`);
   void startRedisSubscription();
 });
