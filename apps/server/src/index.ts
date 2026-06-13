@@ -8,7 +8,7 @@ import messageRoutes from "./routes/message";
 import websocketRoutes from "./routes/websocket";
 import { isHttpError } from "./utils/http-error";
 import { env } from "@pujo-map/env/server";
-import { connectRedis } from "@pujo-map/redis";
+import { createQueueEvents } from "@pujo-map/redis/queue";
 import { serverWsMsgSchema } from "@pujo-map/types/ws";
 
 const fastify = Fastify({
@@ -60,23 +60,24 @@ fastify.get("/", async () => {
   return "OK";
 });
 
-// msg subscription handler
-async function startRedisSubscription() {
-  try {
-    const client = await connectRedis();
-    const sub = client.duplicate();
+// job completion → WS broadcast
+function startQueueEvents() {
+  const queueEvents = createQueueEvents();
 
-    await sub.connect();
-    await sub.subscribe("events_toserver", (message) => {
-      const event = serverWsMsgSchema.parse(JSON.parse(message));
-
+  queueEvents.on("completed", ({ returnvalue }) => {
+    try {
+      const event = serverWsMsgSchema.parse(JSON.parse(returnvalue));
       if (event.type === "msg_add" || event.type === "msg_delete") {
         fastify.broadcast(event);
       }
-    });
-  } catch (error) {
-    fastify.log.error({ err: error }, "Failed to start Redis subscription");
-  }
+    } catch (err) {
+      fastify.log.error({ err }, "Failed to parse completed job event");
+    }
+  });
+
+  queueEvents.on("failed", ({ jobId, failedReason }) => {
+    fastify.log.error({ jobId, failedReason }, "Job failed");
+  });
 }
 
 fastify.listen({ port: env.PORT }, (err) => {
@@ -85,5 +86,5 @@ fastify.listen({ port: env.PORT }, (err) => {
     process.exit(1);
   }
   console.log(`Server running on port ${env.PORT}`);
-  void startRedisSubscription();
+  startQueueEvents();
 });

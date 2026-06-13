@@ -1,20 +1,11 @@
-import { connectRedis } from "@pujo-map/redis";
-import { GROUP, initRedisStream, STREAM } from "@pujo-map/redis/stream";
+import { createWorker } from "@pujo-map/redis/queue";
 import { db } from "@pujo-map/db";
 import { message } from "@pujo-map/db/schema/message";
 import { eq } from "drizzle-orm";
-import { queueJobSchema, type QueueJob } from "@pujo-map/types/job";
 import { serverWsMsgSchema, type ServerWsMsg } from "@pujo-map/types/ws";
 
-await initRedisStream();
-
-const EVENTS_TO_SERVER_CHANNEL = "events_toserver";
-
 type DbMessage = typeof message.$inferSelect;
-type StreamMessage = { id: string; message: Record<string, string> };
-type StreamReadResult = Array<{ name: string; messages: StreamMessage[] }>;
 
-// turns date to string thats it
 function toMessageDto(dbMessage: DbMessage) {
   return {
     id: dbMessage.id,
@@ -28,109 +19,60 @@ function toMessageDto(dbMessage: DbMessage) {
   };
 }
 
-// parses the outer job schema
-function parseQueuedJob(fields: Record<string, string>) {
-  const rawType = fields.type;
-  const rawData = fields.data;
+const worker = createWorker(async (job): Promise<string> => {
+  let event: ServerWsMsg;
 
-  if (!rawType || !rawData) {
-    throw new Error("Queued job is missing type or data field");
-  }
-
-  //extra safe vaildation
-  const parsedJob = queueJobSchema.safeParse({
-    type: rawType,
-    data: JSON.parse(rawData),
-  });
-
-  if (!parsedJob.success) {
-    throw parsedJob.error;
-  }
-
-  return parsedJob.data;
-}
-
-function isStreamReadResult(value: unknown): value is StreamReadResult {
-  return Array.isArray(value);
-}
-
-// for pubilishing processed data, which server can them read for brodcasting
-async function publishServerEvent(
-  pub: Awaited<ReturnType<typeof connectRedis>>,
-  event: ServerWsMsg,
-) {
-  const parsed = serverWsMsgSchema.parse(event);
-
-  await pub.publish(EVENTS_TO_SERVER_CHANNEL, JSON.stringify(parsed));
-}
-
-// what to do on certain job events
-async function processJob(pub: Awaited<ReturnType<typeof connectRedis>>, job: QueueJob) {
-  switch (job.type) {
-    case ("msg_delete"):
-      await publishServerEvent(pub, {
-        type: "msg_delete",
-        data: { id: job.data.messageId, userId: job.data.userId },
-      });
+  switch (job.name) {
+    case "msg_delete": {
+      const { messageId, userId } = job.data as {
+        messageId: string;
+        userId: string;
+      };
+      event = { type: "msg_delete", data: { id: messageId, userId } };
       break;
-    case ("msg_add"):
+    }
+
+    case "msg_add": {
+      const { messageId } = job.data as { messageId: string };
+
       const [processingMessage] = await db
         .update(message)
         .set({ status: "processing" })
-        .where(eq(message.id, job.data.messageId))
+        .where(eq(message.id, messageId))
         .returning();
 
       if (!processingMessage) {
-        throw new Error("db row status change failed");
+        throw new Error("DB status change to 'processing' failed");
       }
 
       const [processedMessage] = await db
         .update(message)
         .set({ status: "processed", text: processingMessage.text.toUpperCase() })
-        .where(eq(message.id, job.data.messageId))
+        .where(eq(message.id, messageId))
         .returning();
 
       if (!processedMessage) {
-        throw new Error("db row processing completion failed");
+        throw new Error("DB status change to 'processed' failed");
       }
 
-      await publishServerEvent(pub, {
-        type: "msg_add",
-        data: toMessageDto(processedMessage),
-      });
+      event = { type: "msg_add", data: toMessageDto(processedMessage) };
       break;
-  default: return
-  }
-}
-
-// main worker loop
-export async function startWorker(consumerName: string) {
-  const client = await connectRedis();
-  const pub = client.duplicate();
-
-  await pub.connect();
-
-  while (true) {
-    const res = await client.xReadGroup(
-      GROUP,
-      consumerName,
-      { key: STREAM, id: ">" },
-      { BLOCK: 5000, COUNT: 1 },
-    );
-    if (!res) continue;
-    if (!isStreamReadResult(res)) continue;
-
-    for (const stream of res) {
-      for (const msg of stream.messages) {
-        const queuedJob = parseQueuedJob(msg.message);
-
-        await processJob(pub, queuedJob);
-        console.log("Processed job:", queuedJob);
-
-        await client.xAck(STREAM, GROUP, msg.id);
-      }
     }
-  }
-}
 
-await startWorker(`worker-${process.pid}`);
+    default:
+      throw new Error(`Unknown job type: ${job.name}`);
+  }
+
+  // Return value is picked up by QueueEvents 'completed' on the server
+  return JSON.stringify(serverWsMsgSchema.parse(event));
+});
+
+worker.on("completed", (job) => {
+  console.log(`[worker] job ${job.id} (${job.name}) completed`);
+});
+
+worker.on("failed", (job, err) => {
+  console.error(`[worker] job ${job?.id} (${job?.name}) failed:`, err.message);
+});
+
+console.log("[worker] started");

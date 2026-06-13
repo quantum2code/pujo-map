@@ -1,13 +1,9 @@
-import { connectRedis } from "@pujo-map/redis";
-import { STREAM } from "@pujo-map/redis/stream";
+import { createQueue } from "@pujo-map/redis/queue";
 import { queueJobSchema, type QueueJob } from "@pujo-map/types/job";
 
-export async function addJob(job: QueueJob) {
-  const parsed = queueJobSchema.parse(job);
-  const client = await connectRedis();
+const queue = createQueue();
 
-  await client.xAdd(STREAM, "*", {
-    type: parsed.type,
-    data: JSON.stringify(parsed.data),
-  });
+export async function addJob(job: QueueJob): Promise<void> {
+  const parsed = queueJobSchema.parse(job);
+  await queue.add(parsed.type, parsed.data);
 }

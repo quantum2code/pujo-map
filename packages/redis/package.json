@@ -12,6 +12,7 @@
   "scripts": {},
   "dependencies": {
     "@pujo-map/env": "workspace:*",
+    "bullmq": "^5.78.0",
     "dotenv": "catalog:",
     "redis": "^5.12.1",
     "zod": "catalog:"
