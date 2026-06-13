@@ -30,7 +30,7 @@ const INITIAL_LENS: Lens = {
 
 // Configurable parameters for auto-rotate mode
 const AUTO_ROTATE_SENSITIVITY = 1.0;    // Multiplier for turning/rotation speed of the camera/map (A/D keys)
-const AUTO_ROTATE_MOVEMENT_RATIO = 0.3;  // Ratio of lateral movement (strafing/orbiting) speed to rotation when turning
+const AUTO_ROTATE_MOVEMENT_RATIO = 2.0;  // Ratio of rotation and strafing (lateral distance in meters per radian of rotation)
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -64,6 +64,7 @@ function MapPage() {
     mode === "test",
     autoRotate,
     AUTO_ROTATE_MOVEMENT_RATIO,
+    AUTO_ROTATE_SENSITIVITY,
   );
 
   // Rotate bearing when autoRotate is on and turning keys are pressed
