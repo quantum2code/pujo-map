@@ -28,6 +28,10 @@ const INITIAL_LENS: Lens = {
   pitch: 0,
 };
 
+// Configurable parameters for auto-rotate mode
+const AUTO_ROTATE_SENSITIVITY = 1.0;    // Multiplier for turning/rotation speed of the camera/map (A/D keys)
+const AUTO_ROTATE_MOVEMENT_RATIO = 0.3;  // Ratio of lateral movement (strafing/orbiting) speed to rotation when turning
+
 // ─── types ────────────────────────────────────────────────────────────────────
 
 type ControlMode = "test" | "live";
@@ -59,6 +63,7 @@ function MapPage() {
     lens.bearing,
     mode === "test",
     autoRotate,
+    AUTO_ROTATE_MOVEMENT_RATIO,
   );
 
   // Rotate bearing when autoRotate is on and turning keys are pressed
@@ -67,7 +72,7 @@ function MapPage() {
 
     let rafId: number;
     let lastTime: number | null = null;
-    const TURN_SPEED = 90; // degrees per second
+    const TURN_SPEED = 90; // base degrees per second
 
     function tick(now: number) {
       rafId = requestAnimationFrame(tick);
@@ -79,7 +84,7 @@ function MapPage() {
       const input = controller.getInput();
       if (input.x !== 0) {
         setLens((prev) => {
-          const newBearing = (prev.bearing + input.x * TURN_SPEED * dt) % 360;
+          const newBearing = (prev.bearing + input.x * TURN_SPEED * AUTO_ROTATE_SENSITIVITY * dt) % 360;
           return {
             ...prev,
             bearing: newBearing < 0 ? newBearing + 360 : newBearing,
