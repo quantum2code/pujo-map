@@ -84,13 +84,12 @@ function MapPage() {
 
       const input = controller.getInput();
       if (input.x !== 0) {
-        setLens((prev) => {
-          const newBearing = (prev.bearing + input.x * TURN_SPEED * AUTO_ROTATE_SENSITIVITY * dt) % 360;
-          return {
-            ...prev,
-            bearing: newBearing < 0 ? newBearing + 360 : newBearing,
-          };
-        });
+        const map = mapRef.current;
+        if (map) {
+          const currentBearing = map.getBearing();
+          const newBearing = (currentBearing + input.x * TURN_SPEED * AUTO_ROTATE_SENSITIVITY * dt) % 360;
+          map.setBearing(newBearing < 0 ? newBearing + 360 : newBearing);
+        }
       }
     }
 
