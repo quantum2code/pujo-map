@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import MapGL, { Marker } from "react-map-gl/maplibre";
 import type { MapRef, ViewState } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -46,6 +46,7 @@ export const Route = createFileRoute("/map")({
 function MapPage() {
   const [mode, setMode] = useState<ControlMode>("test");
   const [is3D, setIs3D] = useState(false);
+  const [autoRotate, setAutoRotate] = useState(false);
 
   const mapRef = useRef<MapRef>(null);
 
@@ -57,12 +58,47 @@ function MapPage() {
     INITIAL_AVATAR,
     lens.bearing,
     mode === "test",
+    autoRotate,
   );
+
+  // Rotate bearing when autoRotate is on and turning keys are pressed
+  useEffect(() => {
+    if (mode !== "test" || !autoRotate) return;
+
+    let rafId: number;
+    let lastTime: number | null = null;
+    const TURN_SPEED = 90; // degrees per second
+
+    function tick(now: number) {
+      rafId = requestAnimationFrame(tick);
+      const dt = lastTime === null ? 0 : (now - lastTime) / 1000;
+      lastTime = now;
+
+      if (dt <= 0) return;
+
+      const input = controller.getInput();
+      if (input.x !== 0) {
+        setLens((prev) => {
+          const newBearing = (prev.bearing + input.x * TURN_SPEED * dt) % 360;
+          return {
+            ...prev,
+            bearing: newBearing < 0 ? newBearing + 360 : newBearing,
+          };
+        });
+      }
+    }
+
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [mode, autoRotate, controller]);
 
   // ── actions ─────────────────────────────────────────────────────────────────
 
   function switchMode(next: ControlMode) {
     setMode(next);
+    if (next === "live") {
+      setAutoRotate(false);
+    }
     // Always recenter on avatar when switching modes
     mapRef.current?.easeTo({
       center: [avatar.longitude, avatar.latitude],
@@ -132,8 +168,22 @@ function MapPage() {
         </button>
       </div>
 
-      {/* ── Controls (top-right): compass + 3D ── */}
+      {/* ── Controls (top-right): compass + 3D + auto-rotate ── */}
       <div className="absolute top-4 right-4 z-10 flex gap-2 items-center">
+        {/* AUTO toggle */}
+        {mode === "test" && (
+          <button
+            id="toggle-auto"
+            onClick={() => setAutoRotate(!autoRotate)}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+              autoRotate
+                ? "bg-blue-500 text-white shadow-lg"
+                : "bg-black/50 text-white/60 hover:text-white backdrop-blur-sm"
+            }`}
+          >
+            AUTO
+          </button>
+        )}
 
         {/* Compass — rotates to show current bearing, click resets to north */}
         <button
@@ -183,14 +233,27 @@ function MapPage() {
       {mode === "test" && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
           <div className="flex gap-2 items-center bg-black/60 text-white text-xs px-4 py-2 rounded-full backdrop-blur-sm select-none">
-            {["W", "A", "S", "D"].map((k) => (
-              <kbd key={k} className="px-1.5 py-0.5 bg-white/20 rounded text-[10px]">{k}</kbd>
-            ))}
-            <span className="mx-1 opacity-50">or</span>
-            {["↑", "↓", "←", "→"].map((k) => (
-              <kbd key={k} className="px-1.5 py-0.5 bg-white/20 rounded text-[10px]">{k}</kbd>
-            ))}
-            <span className="ml-2 opacity-70">to move marker</span>
+            {autoRotate ? (
+              <>
+                <kbd className="px-1.5 py-0.5 bg-white/20 rounded text-[10px]">W</kbd>
+                <kbd className="px-1.5 py-0.5 bg-white/20 rounded text-[10px]">S</kbd>
+                <span className="ml-1 opacity-70">to move,</span>
+                <kbd className="px-1.5 py-0.5 bg-white/20 rounded text-[10px]">A</kbd>
+                <kbd className="px-1.5 py-0.5 bg-white/20 rounded text-[10px]">D</kbd>
+                <span className="ml-1 opacity-70">to turn</span>
+              </>
+            ) : (
+              <>
+                {["W", "A", "S", "D"].map((k) => (
+                  <kbd key={k} className="px-1.5 py-0.5 bg-white/20 rounded text-[10px]">{k}</kbd>
+                ))}
+                <span className="mx-1 opacity-50">or</span>
+                {["↑", "↓", "←", "→"].map((k) => (
+                  <kbd key={k} className="px-1.5 py-0.5 bg-white/20 rounded text-[10px]">{k}</kbd>
+                ))}
+                <span className="ml-2 opacity-70">to move marker</span>
+              </>
+            )}
           </div>
         </div>
       )}
