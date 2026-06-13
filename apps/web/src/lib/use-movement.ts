@@ -27,12 +27,13 @@ export function useMovement(
   bearing: number = 0,
   enabled: boolean = true,
   autoRotate: boolean = false,
-  turnMovementRatio: number = 0.3,
+  turnMovementRatio: number = 2.0,
+  turnSensitivity: number = 1.0,
 ) {
   const [avatarPos, setAvatarPos] = useState<AvatarPosition>(initial);
 
-  const stateRef = useRef({ avatarPos, bearing, enabled, autoRotate, turnMovementRatio });
-  stateRef.current = { avatarPos, bearing, enabled, autoRotate, turnMovementRatio };
+  const stateRef = useRef({ avatarPos, bearing, enabled, autoRotate, turnMovementRatio, turnSensitivity });
+  stateRef.current = { avatarPos, bearing, enabled, autoRotate, turnMovementRatio, turnSensitivity };
 
   useEffect(() => {
     let rafId: number;
@@ -44,7 +45,7 @@ export function useMovement(
       const dt = lastTime === null ? 0 : (now - lastTime) / 1_000;
       lastTime = now;
 
-      const { enabled, bearing, avatarPos, autoRotate, turnMovementRatio } = stateRef.current;
+      const { enabled, bearing, avatarPos, autoRotate, turnMovementRatio, turnSensitivity } = stateRef.current;
       if (!enabled || dt <= 0) return;
 
       const input = controller.getInput();
@@ -54,18 +55,21 @@ export function useMovement(
       const distMetres = SPEED_MPS * dt;
 
       if (autoRotate) {
-        // Forward/backward along current bearing, plus lateral movement (strafing) based on input.x and turnMovementRatio.
+        // Forward/backward along current bearing, plus lateral movement (strafing) based on turning rate.
         if (input.y === 0 && input.x === 0) return;
 
-        const lateralX = input.x * Math.cos(bearingRad) * turnMovementRatio;
-        const lateralY = -input.x * Math.sin(bearingRad) * turnMovementRatio;
+        const TURN_SPEED = 90; // base degrees per second
+        const turnRateRad = (input.x * TURN_SPEED * turnSensitivity * Math.PI) / 180;
 
-        const worldX = input.y * Math.sin(bearingRad) + lateralX;
-        const worldY = input.y * Math.cos(bearingRad) + lateralY;
+        const forwardMeters = input.y * distMetres;
+        const lateralMeters = turnRateRad * dt * turnMovementRatio;
+
+        const worldX = forwardMeters * Math.sin(bearingRad) + lateralMeters * Math.cos(bearingRad);
+        const worldY = forwardMeters * Math.cos(bearingRad) - lateralMeters * Math.sin(bearingRad);
 
         setAvatarPos({
-          longitude: longitude + worldX * distMetres * degPerMetreLng,
-          latitude: latitude + worldY * distMetres * DEG_PER_METRE_LAT,
+          longitude: longitude + worldX * degPerMetreLng,
+          latitude: latitude + worldY * DEG_PER_METRE_LAT,
         });
       } else {
         // Free-look: full 2D movement rotated by bearing so screen-up = forward.
