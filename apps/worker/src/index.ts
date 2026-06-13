@@ -19,6 +19,41 @@ function toMessageDto(dbMessage: DbMessage) {
   };
 }
 
+function decodePolyline(str: string): [number, number][] {
+  const coordinates: [number, number][] = [];
+  let index = 0;
+  const len = str.length;
+  let lat = 0;
+  let lng = 0;
+
+  while (index < len) {
+    let b;
+    let shift = 0;
+    let result = 0;
+    do {
+      b = str.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const dlat = (result & 1) ? ~(result >> 1) : (result >> 1);
+    lat += dlat;
+
+    shift = 0;
+    result = 0;
+    do {
+      b = str.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const dlng = (result & 1) ? ~(result >> 1) : (result >> 1);
+    lng += dlng;
+
+    coordinates.push([lng * 1e-5, lat * 1e-5]);
+  }
+
+  return coordinates;
+}
+
 const worker = createWorker(async (job): Promise<string> => {
   let event: ServerWsMsg;
 
@@ -67,24 +102,75 @@ const worker = createWorker(async (job): Promise<string> => {
       };
 
       try {
-        const url = `https://router.project-osrm.org/route/v1/foot/${start.longitude},${start.latitude};${destination.longitude},${destination.latitude}?overview=full&geometries=geojson`;
-        const res = await fetch(url);
+        const graphqlQuery = {
+          query: `
+            query {
+              plan(
+                from: { lat: ${start.latitude}, lon: ${start.longitude} }
+                to: { lat: ${destination.latitude}, lon: ${destination.longitude} }
+                numItineraries: 1
+              ) {
+                itineraries {
+                  duration
+                  walkDistance
+                  legs {
+                    mode
+                    distance
+                    duration
+                    legGeometry {
+                      points
+                    }
+                  }
+                }
+              }
+            }
+          `,
+        };
+
+        const res = await fetch("http://localhost:8080/otp/routers/default/index/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(graphqlQuery),
+        });
+
         if (!res.ok) {
-          throw new Error(`OSRM responded with status: ${res.status}`);
-        }
-        const data = (await res.json()) as any;
-        if (data.code !== "Ok" || !data.routes || data.routes.length === 0) {
-          throw new Error(`OSRM routing failed: ${data.code || "No routes found"}`);
+          throw new Error(`OTP server responded with status: ${res.status}`);
         }
 
-        const bestRoute = data.routes[0];
+        const body = (await res.json()) as any;
+        if (body.errors && body.errors.length > 0) {
+          throw new Error(body.errors[0].message || "GraphQL Error from OTP server");
+        }
+
+        const plan = body.data?.plan;
+        if (!plan || !plan.itineraries || plan.itineraries.length === 0) {
+          throw new Error("No route found between coordinates");
+        }
+
+        const itinerary = plan.itineraries[0];
+        const coordinates: [number, number][] = [];
+        let totalDistance = 0;
+        let totalDuration = 0;
+
+        for (const leg of itinerary.legs) {
+          totalDistance += leg.distance || 0;
+          totalDuration += leg.duration || 0;
+          if (leg.legGeometry?.points) {
+            const legCoords = decodePolyline(leg.legGeometry.points);
+            coordinates.push(...legCoords);
+          }
+        }
+
         event = {
           type: "route_update",
           data: {
             userId,
-            route: bestRoute.geometry,
-            distance: bestRoute.distance,
-            duration: bestRoute.duration,
+            route: {
+              type: "LineString",
+              coordinates,
+            },
+            distance: totalDistance,
+            duration: totalDuration,
           },
         };
       } catch (err: any) {

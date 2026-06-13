@@ -6,6 +6,7 @@ import authPlugin from "./plugins/auth";
 import authRoutes from "./routes/auth";
 import messageRoutes from "./routes/message";
 import websocketRoutes from "./routes/websocket";
+import routingRoutes from "./routes/routing";
 import { isHttpError } from "./utils/http-error";
 import { env } from "@pujo-map/env/server";
 import { createQueueEvents } from "@pujo-map/redis/queue";
@@ -65,6 +66,7 @@ await fastify.register(websocket);
 fastify.register(authRoutes);
 fastify.register(messageRoutes);
 fastify.register(websocketRoutes);
+fastify.register(routingRoutes);
 
 fastify.get("/", async () => {
   return "OK";

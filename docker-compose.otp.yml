@@ -1,0 +1,11 @@
+services:
+  otp:
+    image: opentripplanner/opentripplanner:latest
+    container_name: pujo-map-otp
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data/otp:/var/opentripplanner:z
+    environment:
+      - JAVA_TOOL_OPTIONS=-Xmx2g
+    command: --build --serve
