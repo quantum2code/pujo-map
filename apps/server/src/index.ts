@@ -16,12 +16,22 @@ const fastify = Fastify({
 });
 
 
-fastify.decorate("wsClients", new Set<WebSocket>());
+fastify.decorate("wsClients", new Map<string, Set<any>>());
 fastify.decorate("broadcast", (data: unknown) => {
   const msg = JSON.stringify(data);
-
-  for (const client of fastify.wsClients) {
-    client.send(msg);
+  for (const sockets of fastify.wsClients.values()) {
+    for (const client of sockets) {
+      client.send(msg);
+    }
+  }
+});
+fastify.decorate("sendToUser", (userId: string, data: unknown) => {
+  const msg = JSON.stringify(data);
+  const sockets = fastify.wsClients.get(userId);
+  if (sockets) {
+    for (const socket of sockets) {
+      socket.send(msg);
+    }
   }
 });
 
@@ -60,7 +70,7 @@ fastify.get("/", async () => {
   return "OK";
 });
 
-// job completion → WS broadcast
+// job completion → WS broadcast / dispatch
 function startQueueEvents() {
   const queueEvents = createQueueEvents();
 
@@ -69,6 +79,8 @@ function startQueueEvents() {
       const event = serverWsMsgSchema.parse(JSON.parse(returnvalue));
       if (event.type === "msg_add" || event.type === "msg_delete") {
         fastify.broadcast(event);
+      } else if (event.type === "route_update") {
+        fastify.sendToUser(event.data.userId, event);
       }
     } catch (err) {
       fastify.log.error({ err }, "Failed to parse completed job event");

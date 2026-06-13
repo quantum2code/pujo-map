@@ -59,6 +59,55 @@ const worker = createWorker(async (job): Promise<string> => {
       break;
     }
 
+    case "calculate_route": {
+      const { userId, start, destination } = job.data as {
+        userId: string;
+        start: { longitude: number; latitude: number };
+        destination: { longitude: number; latitude: number };
+      };
+
+      try {
+        const url = `https://router.project-osrm.org/route/v1/foot/${start.longitude},${start.latitude};${destination.longitude},${destination.latitude}?overview=full&geometries=geojson`;
+        const res = await fetch(url);
+        if (!res.ok) {
+          throw new Error(`OSRM responded with status: ${res.status}`);
+        }
+        const data = (await res.json()) as any;
+        if (data.code !== "Ok" || !data.routes || data.routes.length === 0) {
+          throw new Error(`OSRM routing failed: ${data.code || "No routes found"}`);
+        }
+
+        const bestRoute = data.routes[0];
+        event = {
+          type: "route_update",
+          data: {
+            userId,
+            route: bestRoute.geometry,
+            distance: bestRoute.distance,
+            duration: bestRoute.duration,
+          },
+        };
+      } catch (err: any) {
+        console.error("[worker] calculate_route failed, returning fallback straight-line route:", err.message);
+        event = {
+          type: "route_update",
+          data: {
+            userId,
+            route: {
+              type: "LineString",
+              coordinates: [
+                [start.longitude, start.latitude],
+                [destination.longitude, destination.latitude],
+              ],
+            },
+            distance: 0,
+            duration: 0,
+          },
+        };
+      }
+      break;
+    }
+
     default:
       throw new Error(`Unknown job type: ${job.name}`);
   }

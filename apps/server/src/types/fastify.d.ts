@@ -8,7 +8,8 @@ declare module "fastify" {
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
     broadcast: (data: unknown) => void;
-    wsClients: Set<WebSocket>;
+    sendToUser: (userId: string, data: unknown) => void;
+    wsClients: Map<string, Set<any>>;
   }
 
   interface FastifyRequest {
