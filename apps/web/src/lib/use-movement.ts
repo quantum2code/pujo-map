@@ -27,11 +27,12 @@ export function useMovement(
   bearing: number = 0,
   enabled: boolean = true,
   autoRotate: boolean = false,
+  turnMovementRatio: number = 0.3,
 ) {
   const [avatarPos, setAvatarPos] = useState<AvatarPosition>(initial);
 
-  const stateRef = useRef({ avatarPos, bearing, enabled, autoRotate });
-  stateRef.current = { avatarPos, bearing, enabled, autoRotate };
+  const stateRef = useRef({ avatarPos, bearing, enabled, autoRotate, turnMovementRatio });
+  stateRef.current = { avatarPos, bearing, enabled, autoRotate, turnMovementRatio };
 
   useEffect(() => {
     let rafId: number;
@@ -43,7 +44,7 @@ export function useMovement(
       const dt = lastTime === null ? 0 : (now - lastTime) / 1_000;
       lastTime = now;
 
-      const { enabled, bearing, avatarPos, autoRotate } = stateRef.current;
+      const { enabled, bearing, avatarPos, autoRotate, turnMovementRatio } = stateRef.current;
       if (!enabled || dt <= 0) return;
 
       const input = controller.getInput();
@@ -53,13 +54,14 @@ export function useMovement(
       const distMetres = SPEED_MPS * dt;
 
       if (autoRotate) {
-        // Forward/backward only — project y component onto current bearing direction.
-        // W (y=+1) always moves in the direction the map is facing.
-        // A/D are handled externally as turning; ignore input.x here.
-        if (input.y === 0) return;
+        // Forward/backward along current bearing, plus lateral movement (strafing) based on input.x and turnMovementRatio.
+        if (input.y === 0 && input.x === 0) return;
 
-        const worldX = input.y * Math.sin(bearingRad);
-        const worldY = input.y * Math.cos(bearingRad);
+        const lateralX = input.x * Math.cos(bearingRad) * turnMovementRatio;
+        const lateralY = -input.x * Math.sin(bearingRad) * turnMovementRatio;
+
+        const worldX = input.y * Math.sin(bearingRad) + lateralX;
+        const worldY = input.y * Math.cos(bearingRad) + lateralY;
 
         setAvatarPos({
           longitude: longitude + worldX * distMetres * degPerMetreLng,
