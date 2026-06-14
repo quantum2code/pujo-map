@@ -33,6 +33,19 @@ const INITIAL_LENS: Lens = {
 const AUTO_ROTATE_SENSITIVITY = 1.0;    // Multiplier for turning/rotation speed of the camera/map (A/D keys)
 const AUTO_ROTATE_MOVEMENT_RATIO = 5.0;  // Ratio of rotation and strafing (lateral distance in meters per radian of rotation)
 
+const ROUTE_PAINT = {
+  "line-color": "#f97316", // orange-500
+  "line-width": 5,
+  "line-opacity": 0.75,
+};
+
+const ROUTE_LAYOUT = {
+  "line-join": "round" as const,
+  "line-cap": "round" as const,
+};
+
+const MAP_CONTAINER_STYLE = { width: "100%", height: "100%" };
+
 // ─── types ────────────────────────────────────────────────────────────────────
 
 type ControlMode = "test" | "live";
@@ -104,20 +117,47 @@ function MapPage() {
   const destRef = useRef(destination);
   destRef.current = destination;
 
+  const lastSentRef = useRef<{
+    longitude: number;
+    latitude: number;
+    destination: { longitude: number; latitude: number } | null;
+  } | null>(null);
+
   // Relay location updates on interval
   useEffect(() => {
     const interval = setInterval(() => {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(
-          JSON.stringify({
-            type: "location_update",
-            data: {
-              longitude: avatarRef.current.longitude,
-              latitude: avatarRef.current.latitude,
-              destination: destRef.current || undefined,
-            },
-          })
-        );
+        const currentAvatar = avatarRef.current;
+        const currentDest = destRef.current;
+
+        // Check if anything has changed since the last update
+        const hasAvatarChanged =
+          !lastSentRef.current ||
+          lastSentRef.current.longitude !== currentAvatar.longitude ||
+          lastSentRef.current.latitude !== currentAvatar.latitude;
+          
+        const hasDestChanged =
+          !lastSentRef.current ||
+          JSON.stringify(lastSentRef.current.destination) !== JSON.stringify(currentDest);
+
+        if (hasAvatarChanged || hasDestChanged) {
+          wsRef.current.send(
+            JSON.stringify({
+              type: "location_update",
+              data: {
+                longitude: currentAvatar.longitude,
+                latitude: currentAvatar.latitude,
+                destination: currentDest || undefined,
+              },
+            })
+          );
+          // Update last sent coordinates
+          lastSentRef.current = {
+            longitude: currentAvatar.longitude,
+            latitude: currentAvatar.latitude,
+            destination: currentDest,
+          };
+        }
       }
     }, 2000);
 
@@ -367,7 +407,7 @@ function MapPage() {
             setDestination({ longitude: e.lngLat.lng, latitude: e.lngLat.lat });
           }
         }}
-        style={{ width: "100%", height: "100%" }}
+        style={MAP_CONTAINER_STYLE}
         mapStyle="https://tiles.openfreemap.org/styles/liberty"
       >
         {/* Route Line */}
@@ -380,15 +420,8 @@ function MapPage() {
             <Layer
               id="route-layer"
               type="line"
-              paint={{
-                "line-color": "#f97316", // orange-500
-                "line-width": 5,
-                "line-opacity": 0.75,
-              }}
-              layout={{
-                "line-join": "round",
-                "line-cap": "round",
-              }}
+              paint={ROUTE_PAINT}
+              layout={ROUTE_LAYOUT}
             />
           </Source>
         )}
