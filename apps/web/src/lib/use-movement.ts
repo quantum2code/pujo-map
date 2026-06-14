@@ -24,16 +24,17 @@ export interface AvatarPosition {
 export function useMovement(
   controller: IController,
   initial: AvatarPosition,
-  bearing: number = 0,
+  getBearing: () => number,
   enabled: boolean = true,
   autoRotate: boolean = false,
   turnMovementRatio: number = 2.0,
   turnSensitivity: number = 1.0,
+  onPositionChange?: (pos: AvatarPosition) => void,
 ) {
-  const [avatarPos, setAvatarPos] = useState<AvatarPosition>(initial);
+  const avatarPosRef = useRef<AvatarPosition>(initial);
 
-  const stateRef = useRef({ avatarPos, bearing, enabled, autoRotate, turnMovementRatio, turnSensitivity });
-  stateRef.current = { avatarPos, bearing, enabled, autoRotate, turnMovementRatio, turnSensitivity };
+  const stateRef = useRef({ enabled, autoRotate, turnMovementRatio, turnSensitivity, getBearing, onPositionChange });
+  stateRef.current = { enabled, autoRotate, turnMovementRatio, turnSensitivity, getBearing, onPositionChange };
 
   useEffect(() => {
     let rafId: number;
@@ -45,14 +46,18 @@ export function useMovement(
       const dt = lastTime === null ? 0 : (now - lastTime) / 1_000;
       lastTime = now;
 
-      const { enabled, bearing, avatarPos, autoRotate, turnMovementRatio, turnSensitivity } = stateRef.current;
+      const { enabled, autoRotate, turnMovementRatio, turnSensitivity, getBearing, onPositionChange } = stateRef.current;
       if (!enabled || dt <= 0) return;
 
       const input = controller.getInput();
+      const avatarPos = avatarPosRef.current;
       const { longitude, latitude } = avatarPos;
+      const bearing = getBearing();
       const bearingRad = (bearing * Math.PI) / 180;
       const degPerMetreLng = DEG_PER_METRE_LAT / Math.cos((latitude * Math.PI) / 180);
       const distMetres = SPEED_MPS * dt;
+
+      let nextPos: AvatarPosition | null = null;
 
       if (autoRotate) {
         // Forward/backward along current bearing, plus lateral movement (strafing) based on turning rate.
@@ -67,10 +72,10 @@ export function useMovement(
         const worldX = forwardMeters * Math.sin(bearingRad) + lateralMeters * Math.cos(bearingRad);
         const worldY = forwardMeters * Math.cos(bearingRad) - lateralMeters * Math.sin(bearingRad);
 
-        setAvatarPos({
+        nextPos = {
           longitude: longitude + worldX * degPerMetreLng,
           latitude: latitude + worldY * DEG_PER_METRE_LAT,
-        });
+        };
       } else {
         // Free-look: full 2D movement rotated by bearing so screen-up = forward.
         if (input.x === 0 && input.y === 0) return;
@@ -78,10 +83,17 @@ export function useMovement(
         const worldX = input.x * Math.cos(bearingRad) + input.y * Math.sin(bearingRad);
         const worldY = -input.x * Math.sin(bearingRad) + input.y * Math.cos(bearingRad);
 
-        setAvatarPos({
+        nextPos = {
           longitude: longitude + worldX * distMetres * degPerMetreLng,
           latitude: latitude + worldY * distMetres * DEG_PER_METRE_LAT,
-        });
+        };
+      }
+
+      if (nextPos) {
+        avatarPosRef.current = nextPos;
+        if (onPositionChange) {
+          onPositionChange(nextPos);
+        }
       }
     }
 
@@ -89,5 +101,5 @@ export function useMovement(
     return () => cancelAnimationFrame(rafId);
   }, [controller]);
 
-  return [avatarPos, setAvatarPos] as const;
+  return avatarPosRef;
 }
