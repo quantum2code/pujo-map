@@ -1,27 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import MapGL, { Marker, Source, Layer } from "react-map-gl/maplibre";
-import type { MapRef, ViewState } from "react-map-gl/maplibre";
+import type { MapRef } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
+import maplibregl from "maplibre-gl";
 
 import { KeyboardController } from "@/lib/controller";
-import { useMovement } from "@/lib/use-movement";
+import { useMovement, type AvatarPosition } from "@/lib/use-movement";
 import { getWebSocketUrl } from "@/lib/server-url";
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
 const INITIAL_AVATAR = { longitude: 88.3639, latitude: 22.5726 };
 
-// Lens = all camera properties stored from onMove.
-interface Lens {
-  longitude: number;
-  latitude: number;
-  zoom: number;
-  bearing: number;
-  pitch: number;
-}
-
-const INITIAL_LENS: Lens = {
+const INITIAL_LENS = {
   longitude: INITIAL_AVATAR.longitude,
   latitude: INITIAL_AVATAR.latitude,
   zoom: 16,
@@ -71,33 +63,111 @@ function MapPage() {
   const wsRef = useRef<WebSocket | null>(null);
 
   const mapRef = useRef<MapRef>(null);
+  const markerRef = useRef<maplibregl.Marker | null>(null);
 
-  const [lens, setLens] = useState<Lens>(INITIAL_LENS);
+  // Refs for websocket tracking
+  const destRef = useRef(destination);
+  destRef.current = destination;
+
+  const lastSentRef = useRef<{
+    longitude: number;
+    latitude: number;
+    destination: { longitude: number; latitude: number } | null;
+    timestamp: number;
+  } | null>(null);
+
+  const sendLocationUpdate = (
+    avatarPos: AvatarPosition,
+    force = false
+  ) => {
+    const socket = wsRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+
+    const now = Date.now();
+    const lastSent = lastSentRef.current;
+    const currentDest = destRef.current;
+
+    let shouldSend = force || !lastSent;
+
+    if (lastSent && !shouldSend) {
+      const hasDestChanged = JSON.stringify(lastSent.destination) !== JSON.stringify(currentDest);
+      const hasAvatarMoved = lastSent.longitude !== avatarPos.longitude || lastSent.latitude !== avatarPos.latitude;
+      const timeElapsed = now - lastSent.timestamp >= 2000;
+
+      shouldSend = hasDestChanged || (hasAvatarMoved && timeElapsed);
+    }
+
+    if (shouldSend) {
+      const payload = {
+        type: "location_update",
+        data: {
+          longitude: avatarPos.longitude,
+          latitude: avatarPos.latitude,
+          destination: currentDest || undefined,
+        },
+      };
+      console.log("[ws-relay] sending location update:", payload);
+      socket.send(JSON.stringify(payload));
+
+      lastSentRef.current = {
+        longitude: avatarPos.longitude,
+        latitude: avatarPos.latitude,
+        destination: currentDest,
+        timestamp: now,
+      };
+    }
+  };
 
   const controller = useMemo(() => new KeyboardController(), []);
-  const [avatar, setAvatar] = useMovement(
+  const avatarPosRef = useMovement(
     controller,
     INITIAL_AVATAR,
-    lens.bearing,
+    () => mapRef.current?.getBearing() ?? 0,
     mode === "test",
     autoRotate,
     AUTO_ROTATE_MOVEMENT_RATIO,
     AUTO_ROTATE_SENSITIVITY,
+    (pos) => {
+      if (markerRef.current) {
+        markerRef.current.setLngLat([pos.longitude, pos.latitude]);
+      }
+      if (mode === "test") {
+        const map = mapRef.current;
+        if (map) {
+          map.jumpTo({
+            center: [pos.longitude, pos.latitude],
+          });
+        }
+      }
+      sendLocationUpdate(pos);
+    }
   );
 
   // Initialize WebSocket
   useEffect(() => {
+    console.log("[ws] Initializing connection to", getWebSocketUrl().toString());
     const ws = new WebSocket(getWebSocketUrl());
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log("[ws] connected");
+      console.log("[ws] connected successfully");
+      sendLocationUpdate(avatarPosRef.current, true);
+    };
+
+    ws.onerror = (err) => {
+      console.error("[ws] connection error:", err);
+    };
+
+    ws.onclose = (event) => {
+      console.warn("[ws] connection closed:", event.code, event.reason);
     };
 
     ws.onmessage = (event) => {
+      console.log("[ws] message received:", event.data);
       try {
         const msg = JSON.parse(event.data);
         if (msg.type === "route_update") {
+          console.log("[ws] setting route geometry:", msg.data.route);
           setRouteGeometry(msg.data.route);
         }
       } catch (err) {
@@ -106,63 +176,16 @@ function MapPage() {
     };
 
     return () => {
+      console.log("[ws] cleaning up connection");
       ws.close();
       wsRef.current = null;
     };
   }, []);
 
-  const avatarRef = useRef(avatar);
-  avatarRef.current = avatar;
-
-  const destRef = useRef(destination);
-  destRef.current = destination;
-
-  const lastSentRef = useRef<{
-    longitude: number;
-    latitude: number;
-    destination: { longitude: number; latitude: number } | null;
-  } | null>(null);
-
-  // Relay location updates on interval
+  // Send update immediately if destination changes
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        const currentAvatar = avatarRef.current;
-        const currentDest = destRef.current;
-
-        // Check if anything has changed since the last update
-        const hasAvatarChanged =
-          !lastSentRef.current ||
-          lastSentRef.current.longitude !== currentAvatar.longitude ||
-          lastSentRef.current.latitude !== currentAvatar.latitude;
-          
-        const hasDestChanged =
-          !lastSentRef.current ||
-          JSON.stringify(lastSentRef.current.destination) !== JSON.stringify(currentDest);
-
-        if (hasAvatarChanged || hasDestChanged) {
-          wsRef.current.send(
-            JSON.stringify({
-              type: "location_update",
-              data: {
-                longitude: currentAvatar.longitude,
-                latitude: currentAvatar.latitude,
-                destination: currentDest || undefined,
-              },
-            })
-          );
-          // Update last sent coordinates
-          lastSentRef.current = {
-            longitude: currentAvatar.longitude,
-            latitude: currentAvatar.latitude,
-            destination: currentDest,
-          };
-        }
-      }
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, []);
+    sendLocationUpdate(avatarPosRef.current, true);
+  }, [destination]);
 
   // Rotate bearing when autoRotate is on and turning keys are pressed
   useEffect(() => {
@@ -194,6 +217,16 @@ function MapPage() {
     return () => cancelAnimationFrame(rafId);
   }, [mode, autoRotate, controller]);
 
+  // Clean up native avatar marker on unmount
+  useEffect(() => {
+    return () => {
+      if (markerRef.current) {
+        markerRef.current.remove();
+        markerRef.current = null;
+      }
+    };
+  }, []);
+
   // ── actions ─────────────────────────────────────────────────────────────────
 
   function switchMode(next: ControlMode) {
@@ -201,9 +234,16 @@ function MapPage() {
     if (next === "live") {
       setAutoRotate(false);
     }
+    // Update marker styling imperatively
+    const el = document.getElementById("avatar-marker");
+    if (el) {
+      el.className = `w-4 h-4 rounded-full ring-2 ring-white shadow-lg transition-colors ${
+        next === "live" ? "bg-emerald-500" : "bg-blue-500"
+      }`;
+    }
     // Always recenter on avatar when switching modes
     mapRef.current?.easeTo({
-      center: [avatar.longitude, avatar.latitude],
+      center: [avatarPosRef.current.longitude, avatarPosRef.current.latitude],
       duration: 500,
     });
   }
@@ -221,23 +261,6 @@ function MapPage() {
   function resetNorth() {
     mapRef.current?.easeTo({ bearing: 0, duration: 400 });
   }
-
-  // ── viewState ────────────────────────────────────────────────────────────────
-
-  // test mode — longitude/latitude locked to avatar (snap-back on drag)
-  // live mode — longitude/latitude free from lens (full pan)
-  const viewState: ViewState = {
-    longitude: mode === "test" ? avatar.longitude : lens.longitude,
-    latitude: mode === "test" ? avatar.latitude : lens.latitude,
-    zoom: lens.zoom,
-    bearing: lens.bearing,
-    pitch: lens.pitch,
-    padding: { top: 0, bottom: 0, left: 0, right: 0 },
-  };
-
-  // Compass needle rotates opposite to bearing so N always points true north
-  const compassRotation = -lens.bearing;
-  const isNorth = Math.abs(lens.bearing) < 0.5;
 
   // Memoize route GeoJSON data to prevent resetting/parsing the GeoJSON source on every render/frame
   const routeGeoJSON = useMemo(() => {
@@ -318,19 +341,16 @@ function MapPage() {
           id="compass"
           onClick={resetNorth}
           title="Reset to north"
-          className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
-            isNorth
-              ? "bg-black/50 text-white/40 backdrop-blur-sm cursor-default"
-              : "bg-black/60 text-white hover:bg-black/80 backdrop-blur-sm shadow-lg"
-          }`}
+          className="w-9 h-9 rounded-full flex items-center justify-center transition-all bg-black/50 text-white/40 backdrop-blur-sm cursor-default"
         >
           {/* SVG compass needle — red tip = north, white tip = south */}
           <svg
+            id="compass-needle"
             width="18"
             height="18"
             viewBox="0 0 18 18"
             style={{
-              transform: `rotate(${compassRotation}deg)`,
+              transform: "rotate(0deg)",
               transition: "transform 0.1s linear",
             }}
           >
@@ -389,19 +409,42 @@ function MapPage() {
       {/* ── Map ── */}
       <MapGL
         ref={mapRef}
-        {...viewState}
+        initialViewState={INITIAL_LENS}
         onLoad={(e) => {
           e.target.setPixelRatio(1);
+
+          // Clean up old avatar marker if any
+          if (markerRef.current) {
+            markerRef.current.remove();
+          }
+
+          // Create native avatar marker
+          const el = document.createElement("div");
+          el.id = "avatar-marker";
+          el.className = `w-4 h-4 rounded-full ring-2 ring-white shadow-lg transition-colors ${
+            mode === "live" ? "bg-emerald-500" : "bg-blue-500"
+          }`;
+
+          markerRef.current = new maplibregl.Marker({ element: el, anchor: "center" })
+            .setLngLat([avatarPosRef.current.longitude, avatarPosRef.current.latitude])
+            .addTo(e.target);
         }}
-        onMove={(e) =>
-          setLens({
-            longitude: e.viewState.longitude,
-            latitude: e.viewState.latitude,
-            zoom: e.viewState.zoom,
-            bearing: e.viewState.bearing,
-            pitch: e.viewState.pitch,
-          })
-        }
+        onMove={(e) => {
+          const bearing = e.viewState.bearing;
+          const needle = document.getElementById("compass-needle");
+          if (needle) {
+            needle.style.transform = `rotate(${-bearing}deg)`;
+          }
+          const compassBtn = document.getElementById("compass");
+          if (compassBtn) {
+            const isNorth = Math.abs(bearing) < 0.5;
+            if (isNorth) {
+              compassBtn.className = "w-9 h-9 rounded-full flex items-center justify-center transition-all bg-black/50 text-white/40 backdrop-blur-sm cursor-default";
+            } else {
+              compassBtn.className = "w-9 h-9 rounded-full flex items-center justify-center transition-all bg-black/60 text-white hover:bg-black/80 backdrop-blur-sm shadow-lg";
+            }
+          }
+        }}
         onClick={(e) => {
           if (mode === "test") {
             setDestination({ longitude: e.lngLat.lng, latitude: e.lngLat.lat });
@@ -425,19 +468,6 @@ function MapPage() {
             />
           </Source>
         )}
-
-        {/* Avatar — pinned to its own lat/lng, independent of camera */}
-        <Marker
-          longitude={avatar.longitude}
-          latitude={avatar.latitude}
-          anchor="center"
-        >
-          <div
-            className={`w-4 h-4 rounded-full ring-2 ring-white shadow-lg transition-colors ${
-              mode === "live" ? "bg-emerald-500" : "bg-blue-500"
-            }`}
-          />
-        </Marker>
 
         {/* Destination Pin */}
         {destination && (
