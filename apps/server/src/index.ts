@@ -72,7 +72,7 @@ fastify.get("/", async () => {
   return "OK";
 });
 
-// job completion → WS broadcast / dispatch
+// job completion → WS broadcast
 function startQueueEvents() {
   const queueEvents = createQueueEvents();
 
