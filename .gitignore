@@ -50,3 +50,7 @@ coverage
 tmp
 temp
 routeTree.gen.ts
+
+# Local data
+data/
+

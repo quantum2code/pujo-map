@@ -6,6 +6,7 @@ import authPlugin from "./plugins/auth";
 import authRoutes from "./routes/auth";
 import messageRoutes from "./routes/message";
 import websocketRoutes from "./routes/websocket";
+import routingRoutes from "./routes/routing";
 import { isHttpError } from "./utils/http-error";
 import { env } from "@pujo-map/env/server";
 import { createQueueEvents } from "@pujo-map/redis/queue";
@@ -16,12 +17,22 @@ const fastify = Fastify({
 });
 
 
-fastify.decorate("wsClients", new Set<WebSocket>());
+fastify.decorate("wsClients", new Map<string, Set<any>>());
 fastify.decorate("broadcast", (data: unknown) => {
   const msg = JSON.stringify(data);
-
-  for (const client of fastify.wsClients) {
-    client.send(msg);
+  for (const sockets of fastify.wsClients.values()) {
+    for (const client of sockets) {
+      client.send(msg);
+    }
+  }
+});
+fastify.decorate("sendToUser", (userId: string, data: unknown) => {
+  const msg = JSON.stringify(data);
+  const sockets = fastify.wsClients.get(userId);
+  if (sockets) {
+    for (const socket of sockets) {
+      socket.send(msg);
+    }
   }
 });
 
@@ -55,6 +66,7 @@ await fastify.register(websocket);
 fastify.register(authRoutes);
 fastify.register(messageRoutes);
 fastify.register(websocketRoutes);
+fastify.register(routingRoutes);
 
 fastify.get("/", async () => {
   return "OK";
@@ -69,6 +81,8 @@ function startQueueEvents() {
       const event = serverWsMsgSchema.parse(JSON.parse(returnvalue));
       if (event.type === "msg_add" || event.type === "msg_delete") {
         fastify.broadcast(event);
+      } else if (event.type === "route_update") {
+        fastify.sendToUser(event.data.userId, event);
       }
     } catch (err) {
       fastify.log.error({ err }, "Failed to parse completed job event");

@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import MapGL, { Marker } from "react-map-gl/maplibre";
+import MapGL, { Marker, Source, Layer } from "react-map-gl/maplibre";
 import type { MapRef, ViewState } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import { KeyboardController } from "@/lib/controller";
 import { useMovement } from "@/lib/use-movement";
+import { getWebSocketUrl } from "@/lib/server-url";
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -30,7 +31,20 @@ const INITIAL_LENS: Lens = {
 
 // Configurable parameters for auto-rotate mode
 const AUTO_ROTATE_SENSITIVITY = 1.0;    // Multiplier for turning/rotation speed of the camera/map (A/D keys)
-const AUTO_ROTATE_MOVEMENT_RATIO = 2.0;  // Ratio of rotation and strafing (lateral distance in meters per radian of rotation)
+const AUTO_ROTATE_MOVEMENT_RATIO = 5.0;  // Ratio of rotation and strafing (lateral distance in meters per radian of rotation)
+
+const ROUTE_PAINT = {
+  "line-color": "#f97316", // orange-500
+  "line-width": 5,
+  "line-opacity": 0.75,
+};
+
+const ROUTE_LAYOUT = {
+  "line-join": "round" as const,
+  "line-cap": "round" as const,
+};
+
+const MAP_CONTAINER_STYLE = { width: "100%", height: "100%" };
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -52,6 +66,10 @@ function MapPage() {
   const [is3D, setIs3D] = useState(false);
   const [autoRotate, setAutoRotate] = useState(false);
 
+  const [destination, setDestination] = useState<{ longitude: number; latitude: number } | null>(null);
+  const [routeGeometry, setRouteGeometry] = useState<any>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+
   const mapRef = useRef<MapRef>(null);
 
   const [lens, setLens] = useState<Lens>(INITIAL_LENS);
@@ -66,6 +84,85 @@ function MapPage() {
     AUTO_ROTATE_MOVEMENT_RATIO,
     AUTO_ROTATE_SENSITIVITY,
   );
+
+  // Initialize WebSocket
+  useEffect(() => {
+    const ws = new WebSocket(getWebSocketUrl());
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log("[ws] connected");
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === "route_update") {
+          setRouteGeometry(msg.data.route);
+        }
+      } catch (err) {
+        console.error("[ws] failed to parse message", err);
+      }
+    };
+
+    return () => {
+      ws.close();
+      wsRef.current = null;
+    };
+  }, []);
+
+  const avatarRef = useRef(avatar);
+  avatarRef.current = avatar;
+
+  const destRef = useRef(destination);
+  destRef.current = destination;
+
+  const lastSentRef = useRef<{
+    longitude: number;
+    latitude: number;
+    destination: { longitude: number; latitude: number } | null;
+  } | null>(null);
+
+  // Relay location updates on interval
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        const currentAvatar = avatarRef.current;
+        const currentDest = destRef.current;
+
+        // Check if anything has changed since the last update
+        const hasAvatarChanged =
+          !lastSentRef.current ||
+          lastSentRef.current.longitude !== currentAvatar.longitude ||
+          lastSentRef.current.latitude !== currentAvatar.latitude;
+          
+        const hasDestChanged =
+          !lastSentRef.current ||
+          JSON.stringify(lastSentRef.current.destination) !== JSON.stringify(currentDest);
+
+        if (hasAvatarChanged || hasDestChanged) {
+          wsRef.current.send(
+            JSON.stringify({
+              type: "location_update",
+              data: {
+                longitude: currentAvatar.longitude,
+                latitude: currentAvatar.latitude,
+                destination: currentDest || undefined,
+              },
+            })
+          );
+          // Update last sent coordinates
+          lastSentRef.current = {
+            longitude: currentAvatar.longitude,
+            latitude: currentAvatar.latitude,
+            destination: currentDest,
+          };
+        }
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Rotate bearing when autoRotate is on and turning keys are pressed
   useEffect(() => {
@@ -142,10 +239,36 @@ function MapPage() {
   const compassRotation = -lens.bearing;
   const isNorth = Math.abs(lens.bearing) < 0.5;
 
+  // Memoize route GeoJSON data to prevent resetting/parsing the GeoJSON source on every render/frame
+  const routeGeoJSON = useMemo(() => {
+    if (!routeGeometry) return null;
+    return {
+      type: "Feature" as const,
+      properties: {},
+      geometry: routeGeometry,
+    };
+  }, [routeGeometry]);
+
   // ── render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="fixed inset-0 z-50">
+
+      {/* ── Route info banner (top-center) ── */}
+      {destination && (
+        <div className="absolute top-16 left-4 z-10 bg-black/60 backdrop-blur-sm text-white px-4 py-2 rounded-lg text-xs flex gap-3 items-center shadow-lg pointer-events-auto">
+          <span>Route Active</span>
+          <button
+            onClick={() => {
+              setDestination(null);
+              setRouteGeometry(null);
+            }}
+            className="px-2 py-1 bg-red-500 hover:bg-red-600 rounded text-white font-semibold text-[10px]"
+          >
+            CLEAR
+          </button>
+        </div>
+      )}
 
       {/* ── Mode badges (top-left) ── */}
       <div className="absolute top-4 left-4 z-10 flex gap-2">
@@ -267,6 +390,9 @@ function MapPage() {
       <MapGL
         ref={mapRef}
         {...viewState}
+        onLoad={(e) => {
+          e.target.setPixelRatio(1);
+        }}
         onMove={(e) =>
           setLens({
             longitude: e.viewState.longitude,
@@ -276,9 +402,30 @@ function MapPage() {
             pitch: e.viewState.pitch,
           })
         }
-        style={{ width: "100%", height: "100%" }}
+        onClick={(e) => {
+          if (mode === "test") {
+            setDestination({ longitude: e.lngLat.lng, latitude: e.lngLat.lat });
+          }
+        }}
+        style={MAP_CONTAINER_STYLE}
         mapStyle="https://tiles.openfreemap.org/styles/liberty"
       >
+        {/* Route Line */}
+        {routeGeoJSON && (
+          <Source
+            id="route-source"
+            type="geojson"
+            data={routeGeoJSON}
+          >
+            <Layer
+              id="route-layer"
+              type="line"
+              paint={ROUTE_PAINT}
+              layout={ROUTE_LAYOUT}
+            />
+          </Source>
+        )}
+
         {/* Avatar — pinned to its own lat/lng, independent of camera */}
         <Marker
           longitude={avatar.longitude}
@@ -291,6 +438,19 @@ function MapPage() {
             }`}
           />
         </Marker>
+
+        {/* Destination Pin */}
+        {destination && (
+          <Marker
+            longitude={destination.longitude}
+            latitude={destination.latitude}
+            anchor="bottom"
+          >
+            <div className="w-6 h-6 flex items-center justify-center bg-red-500 rounded-full border-2 border-white shadow-lg text-white font-bold text-xs select-none">
+              📍
+            </div>
+          </Marker>
+        )}
       </MapGL>
     </div>
   );
