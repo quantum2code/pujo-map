@@ -31,7 +31,7 @@ const INITIAL_LENS: Lens = {
 
 // Configurable parameters for auto-rotate mode
 const AUTO_ROTATE_SENSITIVITY = 1.0;    // Multiplier for turning/rotation speed of the camera/map (A/D keys)
-const AUTO_ROTATE_MOVEMENT_RATIO = 2.0;  // Ratio of rotation and strafing (lateral distance in meters per radian of rotation)
+const AUTO_ROTATE_MOVEMENT_RATIO = 5.0;  // Ratio of rotation and strafing (lateral distance in meters per radian of rotation)
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -98,6 +98,12 @@ function MapPage() {
     };
   }, []);
 
+  const avatarRef = useRef(avatar);
+  avatarRef.current = avatar;
+
+  const destRef = useRef(destination);
+  destRef.current = destination;
+
   // Relay location updates on interval
   useEffect(() => {
     const interval = setInterval(() => {
@@ -106,9 +112,9 @@ function MapPage() {
           JSON.stringify({
             type: "location_update",
             data: {
-              longitude: avatar.longitude,
-              latitude: avatar.latitude,
-              destination: destination || undefined,
+              longitude: avatarRef.current.longitude,
+              latitude: avatarRef.current.latitude,
+              destination: destRef.current || undefined,
             },
           })
         );
@@ -116,7 +122,7 @@ function MapPage() {
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [avatar.longitude, avatar.latitude, destination]);
+  }, []);
 
   // Rotate bearing when autoRotate is on and turning keys are pressed
   useEffect(() => {
@@ -192,6 +198,16 @@ function MapPage() {
   // Compass needle rotates opposite to bearing so N always points true north
   const compassRotation = -lens.bearing;
   const isNorth = Math.abs(lens.bearing) < 0.5;
+
+  // Memoize route GeoJSON data to prevent resetting/parsing the GeoJSON source on every render/frame
+  const routeGeoJSON = useMemo(() => {
+    if (!routeGeometry) return null;
+    return {
+      type: "Feature" as const,
+      properties: {},
+      geometry: routeGeometry,
+    };
+  }, [routeGeometry]);
 
   // ── render ──────────────────────────────────────────────────────────────────
 
@@ -334,6 +350,9 @@ function MapPage() {
       <MapGL
         ref={mapRef}
         {...viewState}
+        onLoad={(e) => {
+          e.target.setPixelRatio(1);
+        }}
         onMove={(e) =>
           setLens({
             longitude: e.viewState.longitude,
@@ -352,15 +371,11 @@ function MapPage() {
         mapStyle="https://tiles.openfreemap.org/styles/liberty"
       >
         {/* Route Line */}
-        {routeGeometry && (
+        {routeGeoJSON && (
           <Source
             id="route-source"
             type="geojson"
-            data={{
-              type: "Feature",
-              properties: {},
-              geometry: routeGeometry,
-            }}
+            data={routeGeoJSON}
           >
             <Layer
               id="route-layer"
